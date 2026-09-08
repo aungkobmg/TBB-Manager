@@ -1,456 +1,222 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card, Input, AutoComplete, Table, Button, Select, InputNumber, Space, Typography, Row, Col, Statistic, Tag, Divider, Alert } from 'antd';
-import { PlusOutlined, UserOutlined, ShoppingCartOutlined, ThunderboltOutlined } from '@ant-design/icons';
-import { useToast, useAuth } from '../App';
-import { getProducts, getProductByCode, getCustomers, createCustomer, createOrder, formatCurrency, logActivity } from '../utils/storage';
+import { Card, Input, AutoComplete, Button, Table, Select, InputNumber, Typography, message, Space, Row, Col, Divider, Alert } from 'antd';
+import { PlusOutlined, SearchOutlined, DeleteOutlined } from '@ant-design/icons';
+import { searchProductByCode, searchCustomers, createCustomer, createOrder, formatCurrency } from '../utils/storage';
+import type { Product, Customer } from '../utils/storage';
 
 const { Title, Text } = Typography;
 
-interface CartItem {
-  productId: number;
-  productCode: string;
-  productName: string;
+interface OrderItem {
+  product: Product;
   quantity: number;
-  unitPrice: number;
-  lineTotal: number;
 }
 
 export default function QuickOrder() {
-  const { showToast } = useToast();
-  const { user } = useAuth();
   const navigate = useNavigate();
-  const codeInputRef = useRef<any>(null);
-
-  // Customer state
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [customerSearch, setCustomerSearch] = useState('');
-  const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
-  const [showNewCustomer, setShowNewCustomer] = useState(false);
-  const [newCustomerForm, setNewCustomerForm] = useState({ name: '', phone: '', address: '', township: '', city: '' });
   const [customerOptions, setCustomerOptions] = useState<any[]>([]);
-
-  // Product state
   const [productCode, setProductCode] = useState('');
-  const [cart, setCart] = useState<CartItem[]>([]);
-
-  // Order details
+  const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
   const [deliveryCompany, setDeliveryCompany] = useState('');
   const [deliveryFee, setDeliveryFee] = useState(0);
   const [paymentMethod, setPaymentMethod] = useState('COD');
   const [paymentStatus, setPaymentStatus] = useState<'Paid' | 'Unpaid' | 'Partial'>('Unpaid');
   const [shippingAddress, setShippingAddress] = useState('');
+  const [loading, setLoading] = useState(false);
 
   // Search customers
-  useEffect(() => {
-    if (customerSearch.length >= 1 && !selectedCustomer) {
-      const s = customerSearch.toLowerCase();
-      const customers = getCustomers().filter(c =>
-        c.name.toLowerCase().includes(s) || c.phone.includes(s) || c.facebookName.toLowerCase().includes(s)
-      ).slice(0, 8);
-      setCustomerOptions(customers.map(c => ({
-        value: c.name,
-        label: (
-          <div>
-            <div style={{ fontWeight: 500 }}>{c.name}</div>
-            <Text type="secondary" style={{ fontSize: 12 }}>{c.phone} {c.facebookName && `• ${c.facebookName}`}</Text>
-          </div>
-        ),
-        customer: c,
-      })));
-    } else {
-      setCustomerOptions([]);
-    }
-  }, [customerSearch, selectedCustomer]);
-
-  const selectCustomer = (customer: any) => {
-    setSelectedCustomer(customer);
-    setCustomerSearch(customer.name);
-    setShippingAddress([customer.address, customer.township, customer.city].filter(Boolean).join(', '));
-    setCustomerOptions([]);
-    setShowNewCustomer(false);
-    setTimeout(() => codeInputRef.current?.focus(), 100);
+  const handleCustomerSearch = async (value: string) => {
+    setCustomerSearch(value);
+    if (value.length < 2) { setCustomerOptions([]); return; }
+    try {
+      const results = await searchCustomers(value);
+      setCustomerOptions(results.map(c => ({ value: c.id, label: `${c.name} - ${c.phone || ''}` })));
+    } catch {}
   };
 
-  const handleCreateCustomer = () => {
-    if (!newCustomerForm.name) {
-      showToast('Customer name is required', 'error');
-      return;
+  const handleCustomerSelect = async (value: any) => {
+    // Fetch full customer data
+    const results = await searchCustomers('');
+    const customer = results.find(c => c.id === value);
+    if (customer) {
+      setSelectedCustomer(customer);
+      setShippingAddress(customer.address || '');
     }
-    const c = createCustomer({ ...newCustomerForm, facebookName: '', notes: '' });
-    logActivity(user!.userId, 'Customer Created', 'customer', c.id, `Created from Quick Order: ${c.name}`);
-    selectCustomer(c);
-    setNewCustomerForm({ name: '', phone: '', address: '', township: '', city: '' });
-    showToast('Customer created');
   };
 
-  const handleAddProduct = (e: React.KeyboardEvent) => {
-    if (e.key !== 'Enter') return;
-    const code = productCode.trim().toUpperCase();
-    if (!code) return;
-
-    if (cart.find(item => item.productCode === code)) {
-      showToast('Product already in cart', 'error');
-      setProductCode('');
-      return;
-    }
-
-    const product = getProductByCode(code);
-    if (!product) {
-      showToast('Product not found', 'error');
-      setProductCode('');
-      return;
-    }
-
-    if (product.status === 'Sold') {
-      showToast('This product is already sold', 'error');
-      setProductCode('');
-      return;
-    }
-
-    if (product.status === 'Reserved') {
-      showToast('This product is currently reserved', 'error');
-      setProductCode('');
-      return;
-    }
-
-    if (product.status === 'Cancelled') {
-      showToast('This product is cancelled', 'error');
-      setProductCode('');
-      return;
-    }
-
-    const item: CartItem = {
-      productId: product.id,
-      productCode: product.productCode,
-      productName: product.productName,
-      quantity: 1,
-      unitPrice: product.sellingPrice,
-      lineTotal: product.sellingPrice,
-    };
-    setCart(prev => [...prev, item]);
-    setProductCode('');
-    showToast(`Added ${product.productCode}`);
-    codeInputRef.current?.focus();
-  };
-
-  const removeFromCart = (productId: number) => {
-    setCart(prev => prev.filter(item => item.productId !== productId));
-  };
-
-  const subtotal = cart.reduce((s, item) => s + item.lineTotal, 0);
-  const total = subtotal + deliveryFee;
-
-  const handlePlaceOrder = () => {
-    if (!selectedCustomer) {
-      showToast('Please select or create a customer', 'error');
-      return;
-    }
-    if (cart.length === 0) {
-      showToast('Please add at least one product', 'error');
-      return;
-    }
-
-    for (const item of cart) {
-      const product = getProductByCode(item.productCode);
-      if (!product || product.status !== 'Available') {
-        showToast(`${item.productCode} is no longer available`, 'error');
+  // Add product by code
+  const handleAddProduct = async () => {
+    if (!productCode.trim()) return;
+    try {
+      const product = await searchProductByCode(productCode.trim());
+      if (!product) {
+        message.error('Product not found');
+        setProductCode('');
         return;
       }
+      if (product.status === 'Sold') {
+        message.error('This product is already sold');
+        setProductCode('');
+        return;
+      }
+      if (product.status === 'Reserved') {
+        message.error('This product is currently reserved');
+        setProductCode('');
+        return;
+      }
+      if (orderItems.find(i => i.product.id === product.id)) {
+        message.error('Product already in order');
+        setProductCode('');
+        return;
+      }
+      setOrderItems([...orderItems, { product, quantity: 1 }]);
+      setProductCode('');
+      message.success(`Added ${product.productCode}`);
+    } catch (err) {
+      message.error('Product not found');
     }
-
-    const order = createOrder({
-      orderDate: new Date().toISOString(),
-      customerId: selectedCustomer.id,
-      customerNameSnapshot: selectedCustomer.name,
-      phoneSnapshot: selectedCustomer.phone,
-      shippingAddressSnapshot: shippingAddress || selectedCustomer.address,
-      deliveryCompany,
-      trackingNumber: '',
-      paymentMethod,
-      deliveryFee,
-      subtotal,
-      totalAmount: total,
-      orderStatus: 'Pending',
-      paymentStatus,
-      items: cart.map((item, idx) => ({
-        id: Date.now() + idx,
-        orderId: 0,
-        productId: item.productId,
-        productCodeSnapshot: item.productCode,
-        quantity: item.quantity,
-        unitPrice: item.unitPrice,
-        lineTotal: item.lineTotal,
-      })),
-    });
-
-    logActivity(user!.userId, 'Order Created', 'order', order.id, `Order ${order.voucherNumber} created for ${selectedCustomer.name}`);
-    showToast(`Order ${order.voucherNumber} created!`);
-    navigate(`/voucher/${order.id}`);
   };
 
-  const cartColumns = [
-    {
-      title: 'Product Code',
-      dataIndex: 'productCode',
-      key: 'productCode',
-      render: (text: string) => <span style={{ fontFamily: 'monospace', color: '#0057B8', fontWeight: 500 }}>{text}</span>,
-    },
-    {
-      title: 'Qty',
-      dataIndex: 'quantity',
-      key: 'quantity',
-      align: 'center' as const,
-      width: 80,
-    },
-    {
-      title: 'Unit Price',
-      dataIndex: 'unitPrice',
-      key: 'unitPrice',
-      align: 'right' as const,
-      render: (price: number) => formatCurrency(price),
-    },
-    {
-      title: 'Total',
-      dataIndex: 'lineTotal',
-      key: 'lineTotal',
-      align: 'right' as const,
-      render: (total: number) => <span style={{ fontWeight: 500 }}>{formatCurrency(total)}</span>,
-    },
-    {
-      title: '',
-      key: 'actions',
-      width: 50,
-      render: (_: any, record: CartItem) => (
-        <Button type="text" size="small" danger onClick={() => removeFromCart(record.productId)}>
-          ✕
-        </Button>
-      ),
-    },
-  ];
+  const removeItem = (productId: number) => {
+    setOrderItems(orderItems.filter(i => i.product.id !== productId));
+  };
+
+  const subtotal = orderItems.reduce((sum, i) => sum + i.product.sellingPrice * i.quantity, 0);
+  const total = subtotal + deliveryFee;
+
+  const handleSubmit = async () => {
+    if (!selectedCustomer) { message.error('Please select a customer'); return; }
+    if (orderItems.length === 0) { message.error('Please add at least one product'); return; }
+
+    setLoading(true);
+    try {
+      const order = await createOrder({
+        customerId: selectedCustomer.id,
+        productCodes: orderItems.map(i => i.product.productCode),
+        deliveryFee,
+        deliveryCompany: deliveryCompany || undefined,
+        paymentMethod,
+        paymentStatus,
+        shippingAddress,
+      });
+      message.success(`Order created: ${order.voucherNumber}`);
+      navigate(`/voucher/${order.id}`);
+    } catch (err: any) {
+      message.error(err.message || 'Failed to create order');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div>
-      <div style={{ marginBottom: 24 }}>
-        <Title level={3} style={{ margin: 0 }}>
-          <ThunderboltOutlined style={{ color: '#0057B8', marginRight: 8 }} />
-          Quick Order
-        </Title>
-      </div>
+      <Title level={3}>Quick Order</Title>
 
       <Row gutter={[16, 16]}>
-        {/* Left Column - Customer & Products */}
         <Col xs={24} lg={16}>
           {/* Customer Selection */}
-          <Card title={<><UserOutlined style={{ marginRight: 8 }} />Customer</>} style={{ marginBottom: 16 }}>
-            {selectedCustomer ? (
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: '#f6ffed', borderRadius: 8, border: '1px solid #b7eb8f' }}>
-                <div>
-                  <Text strong>{selectedCustomer.name}</Text>
-                  <div><Text type="secondary">{selectedCustomer.phone}</Text></div>
-                </div>
-                <Button type="link" danger onClick={() => { setSelectedCustomer(null); setCustomerSearch(''); }}>
-                  Change
-                </Button>
-              </div>
-            ) : (
-              <>
-                <AutoComplete
-                  style={{ width: '100%' }}
-                  options={customerOptions}
-                  onSelect={(value, option) => selectCustomer(option.customer)}
-                  onSearch={setCustomerSearch}
-                  value={customerSearch}
-                >
-                  <Input.Search
-                    size="large"
-                    placeholder="Search customer by name, phone, or Facebook..."
-                    enterButton={false}
-                  />
-                </AutoComplete>
-                <Button type="link" icon={<PlusOutlined />} onClick={() => setShowNewCustomer(!showNewCustomer)} style={{ marginTop: 8, padding: 0 }}>
-                  Create New Customer
-                </Button>
-              </>
-            )}
-
-            {showNewCustomer && !selectedCustomer && (
-              <Card size="small" style={{ marginTop: 12, background: '#fafafa' }}>
-                <Row gutter={[12, 12]}>
-                  <Col span={12}>
-                    <Input
-                      placeholder="Name *"
-                      value={newCustomerForm.name}
-                      onChange={e => setNewCustomerForm({ ...newCustomerForm, name: e.target.value })}
-                    />
-                  </Col>
-                  <Col span={12}>
-                    <Input
-                      placeholder="Phone"
-                      value={newCustomerForm.phone}
-                      onChange={e => setNewCustomerForm({ ...newCustomerForm, phone: e.target.value })}
-                    />
-                  </Col>
-                  <Col span={24}>
-                    <Input
-                      placeholder="Address"
-                      value={newCustomerForm.address}
-                      onChange={e => setNewCustomerForm({ ...newCustomerForm, address: e.target.value })}
-                    />
-                  </Col>
-                  <Col span={12}>
-                    <Input
-                      placeholder="Township"
-                      value={newCustomerForm.township}
-                      onChange={e => setNewCustomerForm({ ...newCustomerForm, township: e.target.value })}
-                    />
-                  </Col>
-                  <Col span={12}>
-                    <Input
-                      placeholder="City"
-                      value={newCustomerForm.city}
-                      onChange={e => setNewCustomerForm({ ...newCustomerForm, city: e.target.value })}
-                    />
-                  </Col>
-                  <Col span={24}>
-                    <Button type="primary" onClick={handleCreateCustomer} block>
-                      Create & Select Customer
-                    </Button>
-                  </Col>
-                </Row>
-              </Card>
-            )}
-
+          <Card title="Customer" style={{ marginBottom: 16 }}>
+            <AutoComplete
+              style={{ width: '100%' }}
+              options={customerOptions}
+              onSelect={handleCustomerSelect}
+              onSearch={handleCustomerSearch}
+              placeholder="Search customer by name, phone, or Facebook..."
+            >
+              <Input.Search size="large" enterButton={<SearchOutlined />} />
+            </AutoComplete>
             {selectedCustomer && (
-              <div style={{ marginTop: 12 }}>
-                <Text type="secondary" style={{ fontSize: 12 }}>Shipping Address</Text>
-                <Input.TextArea
-                  value={shippingAddress}
-                  onChange={e => setShippingAddress(e.target.value)}
-                  rows={2}
-                  placeholder="Full shipping address..."
-                  style={{ marginTop: 4 }}
-                />
+              <div style={{ marginTop: 12, padding: 12, background: '#f6ffed', borderRadius: 6 }}>
+                <Text strong>{selectedCustomer.name}</Text>
+                <br />
+                <Text type="secondary">{selectedCustomer.phone} | {selectedCustomer.facebookName}</Text>
               </div>
             )}
-          </Card>
-
-          {/* Product Code Input */}
-          <Card title={<><ShoppingCartOutlined style={{ marginRight: 8 }} />Add Products</>} style={{ marginBottom: 16 }}>
-            <Input
-              ref={codeInputRef}
-              size="large"
-              value={productCode}
-              onChange={e => setProductCode(e.target.value.toUpperCase())}
-              onKeyDown={handleAddProduct}
-              placeholder="Enter Product Code (e.g. TBB-000001) and press Enter"
-              style={{ fontFamily: 'monospace' }}
-              prefix={<span style={{ color: '#0057B8', fontWeight: 600 }}>→</span>}
+            <Input.TextArea
+              style={{ marginTop: 12 }}
+              placeholder="Shipping Address"
+              value={shippingAddress}
+              onChange={e => setShippingAddress(e.target.value)}
+              rows={2}
             />
-            <Text type="secondary" style={{ fontSize: 12, marginTop: 4, display: 'block' }}>
-              Press Enter to add product to order
-            </Text>
           </Card>
 
-          {/* Cart */}
-          <Card title={`Order Items (${cart.length})`}>
+          {/* Product Code Entry */}
+          <Card title="Add Products" style={{ marginBottom: 16 }}>
+            <Space.Compact style={{ width: '100%' }}>
+              <Input
+                size="large"
+                placeholder="Enter Product Code (e.g., TBB-000001)"
+                value={productCode}
+                onChange={e => setProductCode(e.target.value.toUpperCase())}
+                onPressEnter={handleAddProduct}
+                style={{ fontFamily: 'monospace' }}
+              />
+              <Button type="primary" size="large" icon={<PlusOutlined />} onClick={handleAddProduct}>Add</Button>
+            </Space.Compact>
+          </Card>
+
+          {/* Order Items */}
+          <Card title={`Order Items (${orderItems.length})`}>
             <Table
-              columns={cartColumns}
-              dataSource={cart}
-              rowKey="productId"
+              dataSource={orderItems}
+              rowKey={i => i.product.id}
               pagination={false}
               size="small"
-              locale={{ emptyText: 'No items added yet. Enter a product code above.' }}
+              locale={{ emptyText: 'No products added yet' }}
+              columns={[
+                { title: 'Code', render: (_, i) => <Text strong style={{ fontFamily: 'monospace', color: '#0057B8' }}>{i.product.productCode}</Text> },
+                { title: 'Name', render: (_, i) => i.product.productName },
+                { title: 'Qty', dataIndex: 'quantity', align: 'center' },
+                { title: 'Price', align: 'right', render: (_, i) => formatCurrency(i.product.sellingPrice) },
+                { title: 'Total', align: 'right', render: (_, i) => formatCurrency(i.product.sellingPrice * i.quantity) },
+                { title: '', render: (_, i) => <Button type="text" danger icon={<DeleteOutlined />} onClick={() => removeItem(i.product.id)} /> },
+              ]}
             />
           </Card>
         </Col>
 
-        {/* Right Column - Order Summary */}
         <Col xs={24} lg={8}>
-          <Card
-            title="Order Summary"
-            style={{ position: 'sticky', top: 80 }}
-          >
-            <div style={{ marginBottom: 16 }}>
-              <Text type="secondary" style={{ fontSize: 12 }}>Delivery Company</Text>
-              <Select
-                style={{ width: '100%', marginTop: 4 }}
-                value={deliveryCompany || undefined}
-                onChange={setDeliveryCompany}
-                placeholder="Select delivery company"
-                allowClear
-              >
-                <Select.Option value="Royal Express">Royal Express</Select.Option>
-                <Select.Option value="BeeXpress">BeeXpress</Select.Option>
-                <Select.Option value="Ninja Van">Ninja Van</Select.Option>
-                <Select.Option value="Wepost">Wepost</Select.Option>
-              </Select>
+          {/* Delivery & Payment */}
+          <Card title="Delivery" style={{ marginBottom: 16 }}>
+            <Select style={{ width: '100%', marginBottom: 12 }} placeholder="Delivery Company" value={deliveryCompany || undefined} onChange={setDeliveryCompany} allowClear>
+              <Select.Option value="Royal Express">Royal Express</Select.Option>
+              <Select.Option value="BeeXpress">BeeXpress</Select.Option>
+              <Select.Option value="Ninja Van">Ninja Van</Select.Option>
+              <Select.Option value="Wepost">Wepost</Select.Option>
+            </Select>
+            <InputNumber style={{ width: '100%' }} placeholder="Delivery Fee" value={deliveryFee} onChange={v => setDeliveryFee(v || 0)} min={0} addonAfter="MMK" />
+          </Card>
+
+          <Card title="Payment" style={{ marginBottom: 16 }}>
+            <Select style={{ width: '100%', marginBottom: 12 }} value={paymentMethod} onChange={setPaymentMethod}>
+              <Select.Option value="COD">COD</Select.Option>
+              <Select.Option value="KBZ Pay">KBZ Pay</Select.Option>
+              <Select.Option value="Wave Pay">Wave Pay</Select.Option>
+              <Select.Option value="AYA Pay">AYA Pay</Select.Option>
+            </Select>
+            <Select style={{ width: '100%' }} value={paymentStatus} onChange={setPaymentStatus}>
+              <Select.Option value="Unpaid">Unpaid</Select.Option>
+              <Select.Option value="Paid">Paid</Select.Option>
+              <Select.Option value="Partial">Partial</Select.Option>
+            </Select>
+          </Card>
+
+          {/* Summary */}
+          <Card>
+            <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between' }}>
+              <Text>Subtotal</Text><Text>{formatCurrency(subtotal)}</Text>
             </div>
-
-            <div style={{ marginBottom: 16 }}>
-              <Text type="secondary" style={{ fontSize: 12 }}>Delivery Fee (MMK)</Text>
-              <InputNumber
-                style={{ width: '100%', marginTop: 4 }}
-                value={deliveryFee}
-                onChange={v => setDeliveryFee(v || 0)}
-                min={0}
-              />
+            <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between' }}>
+              <Text>Delivery Fee</Text><Text>{formatCurrency(deliveryFee)}</Text>
             </div>
-
-            <div style={{ marginBottom: 16 }}>
-              <Text type="secondary" style={{ fontSize: 12 }}>Payment Method</Text>
-              <Select
-                style={{ width: '100%', marginTop: 4 }}
-                value={paymentMethod}
-                onChange={setPaymentMethod}
-              >
-                <Select.Option value="COD">COD</Select.Option>
-                <Select.Option value="KBZ Pay">KBZ Pay</Select.Option>
-                <Select.Option value="Wave Pay">Wave Pay</Select.Option>
-                <Select.Option value="AYA Pay">AYA Pay</Select.Option>
-              </Select>
+            <Divider style={{ margin: '8px 0' }} />
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 18, fontWeight: 'bold' }}>
+              <Text strong>Total</Text><Text strong style={{ color: '#0057B8' }}>{formatCurrency(total)}</Text>
             </div>
-
-            <div style={{ marginBottom: 16 }}>
-              <Text type="secondary" style={{ fontSize: 12 }}>Payment Status</Text>
-              <Select
-                style={{ width: '100%', marginTop: 4 }}
-                value={paymentStatus}
-                onChange={setPaymentStatus}
-              >
-                <Select.Option value="Unpaid">Unpaid</Select.Option>
-                <Select.Option value="Paid">Paid</Select.Option>
-                <Select.Option value="Partial">Partial</Select.Option>
-              </Select>
-            </div>
-
-            <Divider />
-
-            <div style={{ marginBottom: 8 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                <Text>Subtotal</Text>
-                <Text strong>{formatCurrency(subtotal)}</Text>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                <Text>Delivery Fee</Text>
-                <Text strong>{formatCurrency(deliveryFee)}</Text>
-              </div>
-            </div>
-
-            <Divider style={{ margin: '12px 0' }} />
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-              <Text strong style={{ fontSize: 18 }}>Total</Text>
-              <Text strong style={{ fontSize: 18, color: '#0057B8' }}>{formatCurrency(total)}</Text>
-            </div>
-
-            <Button
-              type="primary"
-              size="large"
-              block
-              onClick={handlePlaceOrder}
-              disabled={cart.length === 0 || !selectedCustomer}
-              icon={<ThunderboltOutlined />}
-            >
+            <Button type="primary" size="large" block style={{ marginTop: 16 }} onClick={handleSubmit} loading={loading} disabled={!selectedCustomer || orderItems.length === 0}>
               Place Order & Generate Voucher
             </Button>
           </Card>
