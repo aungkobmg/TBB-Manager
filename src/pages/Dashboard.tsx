@@ -1,6 +1,19 @@
-import { useState, useMemo } from 'react';
+import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
+import { Card, Row, Col, Statistic, Table, Tag, Typography, Space } from 'antd';
+import {
+  DollarOutlined,
+  ShoppingCartOutlined,
+  TagsOutlined,
+  InboxOutlined,
+  RiseOutlined,
+  FallOutlined,
+  ClockCircleOutlined,
+  CheckCircleOutlined,
+} from '@ant-design/icons';
 import { getOrders, getProducts, getExpenses, getCustomers, getBales, formatCurrency, formatDate } from '../utils/storage';
+
+const { Title, Text } = Typography;
 
 export default function Dashboard() {
   const orders = getOrders();
@@ -21,7 +34,6 @@ export default function Dashboard() {
   const revenueToday = todayOrders.reduce((s, o) => s + o.totalAmount, 0);
   const revenueMonth = monthOrders.reduce((s, o) => s + o.totalAmount, 0);
   const inventoryCostValue = availableProducts.reduce((s, p) => s + p.costPrice, 0);
-  const inventorySellingValue = availableProducts.reduce((s, p) => s + p.sellingPrice, 0);
   const totalExpenses = expenses.reduce((s, e) => s + e.amount, 0);
   const totalRevenue = orders.filter(o => o.orderStatus !== 'Cancelled').reduce((s, o) => s + o.totalAmount, 0);
   const totalProductCost = orders.filter(o => o.orderStatus !== 'Cancelled').reduce((s, o) =>
@@ -35,112 +47,231 @@ export default function Dashboard() {
   const recentOrders = [...orders].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 5);
   const recentExpenses = [...expenses].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 5);
 
-  const metrics = [
-    { label: 'Revenue Today', value: formatCurrency(revenueToday), icon: 'fa-coins', color: 'text-green-600' },
-    { label: 'Revenue This Month', value: formatCurrency(revenueMonth), icon: 'fa-chart-line', color: 'text-blue-600' },
-    { label: 'Orders Today', value: todayOrders.length.toString(), icon: 'fa-clipboard-list', color: 'text-purple-600' },
-    { label: 'Pending Orders', value: pendingOrders.length.toString(), icon: 'fa-clock', color: 'text-orange-600' },
-    { label: 'Available Products', value: availableProducts.length.toString(), icon: 'fa-tags', color: 'text-teal-600' },
-    { label: 'Inventory Cost Value', value: formatCurrency(inventoryCostValue), icon: 'fa-warehouse', color: 'text-indigo-600' },
-    { label: 'Total Expenses', value: formatCurrency(totalExpenses), icon: 'fa-receipt', color: 'text-red-600' },
-    { label: 'Gross Profit', value: formatCurrency(grossProfit), icon: 'fa-arrow-trend-up', color: 'text-emerald-600' },
-    { label: 'Net Profit', value: formatCurrency(netProfit), icon: 'fa-sack-dollar', color: 'text-green-700' },
+  const orderColumns = [
+    {
+      title: 'Voucher',
+      dataIndex: 'voucherNumber',
+      key: 'voucherNumber',
+      render: (text: string, record: any) => (
+        <Link to={`/orders/${record.id}`} style={{ fontFamily: 'monospace', color: '#0057B8' }}>
+          {text}
+        </Link>
+      ),
+    },
+    {
+      title: 'Customer',
+      dataIndex: 'customerNameSnapshot',
+      key: 'customerNameSnapshot',
+    },
+    {
+      title: 'Amount',
+      dataIndex: 'totalAmount',
+      key: 'totalAmount',
+      align: 'right' as const,
+      render: (amount: number) => formatCurrency(amount),
+    },
+    {
+      title: 'Status',
+      dataIndex: 'orderStatus',
+      key: 'orderStatus',
+      render: (status: string) => {
+        const colors: Record<string, string> = {
+          Pending: 'gold',
+          Confirmed: 'blue',
+          Packed: 'purple',
+          Shipped: 'geekblue',
+          Delivered: 'green',
+          Cancelled: 'red',
+        };
+        return <Tag color={colors[status] || 'default'}>{status}</Tag>;
+      },
+    },
+  ];
+
+  const expenseColumns = [
+    {
+      title: 'Category',
+      dataIndex: 'category',
+      key: 'category',
+    },
+    {
+      title: 'Date',
+      dataIndex: 'expenseDate',
+      key: 'expenseDate',
+      render: (date: string) => formatDate(date),
+    },
+    {
+      title: 'Amount',
+      dataIndex: 'amount',
+      key: 'amount',
+      align: 'right' as const,
+      render: (amount: number) => <Text type="danger">{formatCurrency(amount)}</Text>,
+    },
   ];
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-        <p className="text-sm text-gray-500">{formatDate(new Date().toISOString())}</p>
+      <div style={{ marginBottom: 24 }}>
+        <Title level={3} style={{ marginBottom: 4 }}>Dashboard</Title>
+        <Text type="secondary">{formatDate(new Date().toISOString())}</Text>
       </div>
 
-      {/* Metrics Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-        {metrics.map((m, i) => (
-          <div key={i} className="bg-white rounded-xl border border-gray-200 p-4">
-            <div className="flex items-center gap-3">
-              <div className={`w-10 h-10 rounded-lg bg-gray-50 flex items-center justify-center ${m.color}`}>
-                <i className={`fas ${m.icon}`}></i>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">{m.label}</p>
-                <p className="text-lg font-bold text-gray-900">{m.value}</p>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
+      {/* Statistics Cards */}
+      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+        <Col xs={24} sm={12} lg={6}>
+          <Card>
+            <Statistic
+              title="Revenue Today"
+              value={revenueToday}
+              precision={0}
+              valueStyle={{ color: '#52c41a' }}
+              prefix={<DollarOutlined />}
+              suffix="MMK"
+              formatter={(value) => `${Number(value).toLocaleString()} MMK`}
+            />
+          </Card>
+        </Col>
+        <Col xs={24} sm={12} lg={6}>
+          <Card>
+            <Statistic
+              title="Revenue This Month"
+              value={revenueMonth}
+              precision={0}
+              valueStyle={{ color: '#1890ff' }}
+              prefix={<RiseOutlined />}
+              suffix="MMK"
+              formatter={(value) => `${Number(value).toLocaleString()} MMK`}
+            />
+          </Card>
+        </Col>
+        <Col xs={24} sm={12} lg={6}>
+          <Card>
+            <Statistic
+              title="Orders Today"
+              value={todayOrders.length}
+              valueStyle={{ color: '#722ed1' }}
+              prefix={<ShoppingCartOutlined />}
+            />
+          </Card>
+        </Col>
+        <Col xs={24} sm={12} lg={6}>
+          <Card>
+            <Statistic
+              title="Pending Orders"
+              value={pendingOrders.length}
+              valueStyle={{ color: '#fa8c16' }}
+              prefix={<ClockCircleOutlined />}
+            />
+          </Card>
+        </Col>
+      </Row>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recent Orders */}
-        <div className="bg-white rounded-xl border border-gray-200">
-          <div className="p-4 border-b border-gray-100 flex items-center justify-between">
-            <h2 className="font-semibold text-gray-900">Recent Orders</h2>
-            <Link to="/orders" className="text-sm text-[#0057B8] hover:underline">View All</Link>
-          </div>
-          <div className="divide-y divide-gray-50">
-            {recentOrders.length === 0 ? (
-              <p className="p-4 text-sm text-gray-400 text-center">No orders yet</p>
-            ) : recentOrders.map(o => (
-              <Link key={o.id} to={`/orders/${o.id}`} className="flex items-center justify-between p-4 hover:bg-gray-50">
-                <div>
-                  <p className="text-sm font-medium text-gray-900">{o.voucherNumber}</p>
-                  <p className="text-xs text-gray-500">{o.customerNameSnapshot}</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm font-medium text-gray-900">{formatCurrency(o.totalAmount)}</p>
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${
-                    o.orderStatus === 'Delivered' ? 'bg-green-100 text-green-700' :
-                    o.orderStatus === 'Cancelled' ? 'bg-red-100 text-red-700' :
-                    'bg-yellow-100 text-yellow-700'
-                  }`}>{o.orderStatus}</span>
-                </div>
-              </Link>
-            ))}
-          </div>
-        </div>
+      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+        <Col xs={24} sm={12} lg={6}>
+          <Card>
+            <Statistic
+              title="Available Products"
+              value={availableProducts.length}
+              valueStyle={{ color: '#13c2c2' }}
+              prefix={<TagsOutlined />}
+            />
+          </Card>
+        </Col>
+        <Col xs={24} sm={12} lg={6}>
+          <Card>
+            <Statistic
+              title="Inventory Cost Value"
+              value={inventoryCostValue}
+              precision={0}
+              valueStyle={{ color: '#2f54eb' }}
+              prefix={<InboxOutlined />}
+              formatter={(value) => `${Number(value).toLocaleString()} MMK`}
+            />
+          </Card>
+        </Col>
+        <Col xs={24} sm={12} lg={6}>
+          <Card>
+            <Statistic
+              title="Gross Profit"
+              value={grossProfit}
+              precision={0}
+              valueStyle={{ color: '#52c41a' }}
+              prefix={<RiseOutlined />}
+              formatter={(value) => `${Number(value).toLocaleString()} MMK`}
+            />
+          </Card>
+        </Col>
+        <Col xs={24} sm={12} lg={6}>
+          <Card>
+            <Statistic
+              title="Net Profit"
+              value={netProfit}
+              precision={0}
+              valueStyle={{ color: netProfit >= 0 ? '#389e0d' : '#cf1322' }}
+              prefix={netProfit >= 0 ? <RiseOutlined /> : <FallOutlined />}
+              formatter={(value) => `${Number(value).toLocaleString()} MMK`}
+            />
+          </Card>
+        </Col>
+      </Row>
 
-        {/* Recent Expenses */}
-        <div className="bg-white rounded-xl border border-gray-200">
-          <div className="p-4 border-b border-gray-100 flex items-center justify-between">
-            <h2 className="font-semibold text-gray-900">Recent Expenses</h2>
-            <Link to="/finance" className="text-sm text-[#0057B8] hover:underline">View All</Link>
-          </div>
-          <div className="divide-y divide-gray-50">
-            {recentExpenses.length === 0 ? (
-              <p className="p-4 text-sm text-gray-400 text-center">No expenses yet</p>
-            ) : recentExpenses.map(e => (
-              <div key={e.id} className="flex items-center justify-between p-4">
-                <div>
-                  <p className="text-sm font-medium text-gray-900">{e.category}</p>
-                  <p className="text-xs text-gray-500">{formatDate(e.expenseDate)}</p>
-                </div>
-                <p className="text-sm font-medium text-red-600">{formatCurrency(e.amount)}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
+      {/* Recent Orders & Expenses */}
+      <Row gutter={[16, 16]}>
+        <Col xs={24} lg={14}>
+          <Card
+            title="Recent Orders"
+            extra={<Link to="/orders">View All</Link>}
+          >
+            <Table
+              columns={orderColumns}
+              dataSource={recentOrders}
+              rowKey="id"
+              pagination={false}
+              size="small"
+              locale={{ emptyText: 'No orders yet' }}
+            />
+          </Card>
+        </Col>
+        <Col xs={24} lg={10}>
+          <Card
+            title="Recent Expenses"
+            extra={<Link to="/finance">View All</Link>}
+          >
+            <Table
+              columns={expenseColumns}
+              dataSource={recentExpenses}
+              rowKey="id"
+              pagination={false}
+              size="small"
+              locale={{ emptyText: 'No expenses yet' }}
+            />
+          </Card>
+        </Col>
+      </Row>
 
       {/* Quick Stats */}
-      <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div className="bg-white rounded-xl border border-gray-200 p-4 text-center">
-          <p className="text-2xl font-bold text-gray-900">{bales.length}</p>
-          <p className="text-xs text-gray-500">Total Bales</p>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-4 text-center">
-          <p className="text-2xl font-bold text-gray-900">{products.length}</p>
-          <p className="text-xs text-gray-500">Total Products</p>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-4 text-center">
-          <p className="text-2xl font-bold text-gray-900">{customers.length}</p>
-          <p className="text-xs text-gray-500">Total Customers</p>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-4 text-center">
-          <p className="text-2xl font-bold text-gray-900">{orders.length}</p>
-          <p className="text-xs text-gray-500">Total Orders</p>
-        </div>
-      </div>
+      <Row gutter={[16, 16]} style={{ marginTop: 24 }}>
+        <Col xs={12} sm={6}>
+          <Card style={{ textAlign: 'center' }}>
+            <Statistic title="Total Bales" value={bales.length} />
+          </Card>
+        </Col>
+        <Col xs={12} sm={6}>
+          <Card style={{ textAlign: 'center' }}>
+            <Statistic title="Total Products" value={products.length} />
+          </Card>
+        </Col>
+        <Col xs={12} sm={6}>
+          <Card style={{ textAlign: 'center' }}>
+            <Statistic title="Total Customers" value={customers.length} />
+          </Card>
+        </Col>
+        <Col xs={12} sm={6}>
+          <Card style={{ textAlign: 'center' }}>
+            <Statistic title="Total Orders" value={orders.length} />
+          </Card>
+        </Col>
+      </Row>
     </div>
   );
 }

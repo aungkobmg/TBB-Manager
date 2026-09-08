@@ -1,162 +1,191 @@
-import { useParams, Link } from 'react-router-dom';
+import { useState, useRef } from 'react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { Card, Button, Space, Typography, Descriptions, Table, Divider, Tag } from 'antd';
+import { ArrowLeftOutlined, PrinterOutlined, DownloadOutlined } from '@ant-design/icons';
 import { getOrder, getSettings, formatCurrency, formatDate } from '../utils/storage';
+
+const { Title, Text } = Typography;
 
 export default function VoucherView() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const order = getOrder(Number(id));
   const settings = getSettings();
+  const receiptRef = useRef<HTMLDivElement>(null);
 
-  if (!order) return <div className="text-center py-12 text-gray-400">Voucher not found</div>;
+  if (!order) return <div style={{ textAlign: 'center', padding: 48 }}><Text type="secondary">Voucher not found</Text></div>;
 
-  const handlePrint = () => { window.print(); };
+  const handlePrint = () => {
+    window.print();
+  };
 
-  const now = new Date(order.createdAt);
-  const timeStr = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  const orderDate = new Date(order.orderDate);
+  const dateStr = orderDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  const timeStr = orderDate.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 
   return (
     <div>
-      {/* Screen controls - hidden on print */}
-      <div className="no-print flex items-center justify-between mb-6">
-        <div>
-          <Link to={`/orders/${order.id}`} className="text-sm text-gray-500 hover:text-gray-700"><i className="fas fa-arrow-left mr-1"></i>Back to Order</Link>
-          <h1 className="text-2xl font-bold text-gray-900 mt-2">Voucher: {order.voucherNumber}</h1>
+      {/* Screen View - Hidden during print */}
+      <div className="no-print">
+        <div style={{ marginBottom: 24 }}>
+          <Link to={`/orders/${order.id}`}>
+            <Button type="link" icon={<ArrowLeftOutlined />} style={{ padding: 0, marginBottom: 8 }}>
+              Back to Order
+            </Button>
+          </Link>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Title level={3} style={{ margin: 0 }}>
+              Voucher: {order.voucherNumber}
+            </Title>
+            <Space>
+              <Button type="primary" icon={<PrinterOutlined />} onClick={handlePrint}>
+                Print Receipt
+              </Button>
+            </Space>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <button onClick={handlePrint} className="bg-[#0057B8] text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#003d82]">
-            <i className="fas fa-print mr-2"></i>Print Receipt
-          </button>
-        </div>
+
+        {/* Preview Card */}
+        <Card style={{ maxWidth: 400, margin: '0 auto', border: '2px dashed #d9d9d9' }}>
+          <div style={{ textAlign: 'center', marginBottom: 16 }}>
+            <Text strong style={{ fontSize: 16 }}>{settings.businessName}</Text>
+            <br />
+            <Text type="secondary" style={{ fontSize: 12 }}>Voucher Preview (80mm)</Text>
+          </div>
+          <Divider style={{ margin: '8px 0' }} />
+          <div style={{ fontSize: 13 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+              <Text type="secondary">Voucher No:</Text>
+              <Text strong style={{ fontFamily: 'monospace' }}>{order.voucherNumber}</Text>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+              <Text type="secondary">Date:</Text>
+              <Text>{dateStr}</Text>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+              <Text type="secondary">Time:</Text>
+              <Text>{timeStr}</Text>
+            </div>
+            <Divider style={{ margin: '8px 0' }} />
+            <div style={{ marginBottom: 8 }}>
+              <Text type="secondary" style={{ fontSize: 11 }}>CUSTOMER</Text>
+              <div><Text>{order.customerNameSnapshot}</Text></div>
+              <div><Text type="secondary" style={{ fontSize: 12 }}>{order.phoneSnapshot}</Text></div>
+              <div><Text type="secondary" style={{ fontSize: 12 }}>{order.shippingAddressSnapshot}</Text></div>
+            </div>
+            <Divider style={{ margin: '8px 0' }} />
+            <div style={{ marginBottom: 8 }}>
+              <Text type="secondary" style={{ fontSize: 11 }}>ITEMS</Text>
+              {order.items.map((item, i) => (
+                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+                  <span style={{ fontFamily: 'monospace' }}>{item.productCodeSnapshot}</span>
+                  <span>{item.quantity}</span>
+                  <span>{formatCurrency(item.lineTotal)}</span>
+                </div>
+              ))}
+            </div>
+            <Divider style={{ margin: '8px 0' }} />
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
+              <Text>Subtotal</Text>
+              <Text>{formatCurrency(order.subtotal)}</Text>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+              <Text>Delivery Fee</Text>
+              <Text>{formatCurrency(order.deliveryFee)}</Text>
+            </div>
+            <Divider style={{ margin: '4px 0' }} />
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <Text strong style={{ fontSize: 14 }}>TOTAL</Text>
+              <Text strong style={{ fontSize: 14, color: '#0057B8' }}>{formatCurrency(order.totalAmount)}</Text>
+            </div>
+            <Divider style={{ margin: '8px 0' }} />
+            <div style={{ textAlign: 'center', marginBottom: 4 }}>
+              <Text type="secondary" style={{ fontSize: 12 }}>Payment: {order.paymentMethod}</Text>
+            </div>
+            <Divider style={{ margin: '8px 0' }} />
+            <div style={{ textAlign: 'center', fontSize: 11 }}>
+              <div>Facebook: {settings.facebook}</div>
+              <div>Phone: {settings.phone}</div>
+              <div style={{ marginTop: 4 }}>{settings.voucherFooter}</div>
+            </div>
+          </div>
+        </Card>
       </div>
 
-      {/* Thermal Receipt - Print Area */}
-      <div className="print-area receipt mx-auto bg-white border border-gray-200 rounded-lg p-6 max-w-xs" id="thermal-receipt">
-        {/* Header */}
-        <div className="receipt-header text-center mb-3">
-          <h2 className="text-sm font-bold uppercase tracking-wide">{settings.businessName}</h2>
+      {/* Thermal Receipt - Only visible during print */}
+      <div className="thermal-receipt" ref={receiptRef}>
+        <div className="receipt-header">
+          <div className="business-name">{settings.businessName}</div>
         </div>
 
-        <div className="receipt-divider"></div>
-
-        {/* Voucher Info */}
-        <div className="text-center mb-2">
-          <p className="text-xs text-gray-600">Voucher No:</p>
-          <p className="font-bold text-sm">{order.voucherNumber}</p>
-          <p className="text-xs mt-1">Date: {formatDate(order.orderDate)}</p>
-          <p className="text-xs">Time: {timeStr}</p>
-        </div>
-
-        <div className="receipt-divider"></div>
-
-        {/* Customer */}
-        <div className="mb-2">
-          <p className="text-xs font-bold mb-1">CUSTOMER</p>
-          <p className="text-xs">Name: {order.customerNameSnapshot}</p>
-          <p className="text-xs">Phone: {order.phoneSnapshot}</p>
-          {order.shippingAddressSnapshot && (
-            <div className="text-xs">
-              <span>Address: </span>
-              <span>{order.shippingAddressSnapshot}</span>
-            </div>
-          )}
-        </div>
-
-        <div className="receipt-divider"></div>
-
-        {/* Items */}
-        <div className="mb-2">
-          <div className="flex justify-between text-xs font-bold mb-1">
-            <span>Code</span>
-            <span>Qty</span>
-            <span>Amount</span>
+        <div className="receipt-info">
+          <div className="info-row">
+            <span>Voucher No:</span>
+            <span style={{ fontWeight: 'bold' }}>{order.voucherNumber}</span>
           </div>
-          {order.items.map(item => (
-            <div key={item.id} className="flex justify-between text-xs py-0.5">
-              <span className="font-mono">{item.productCodeSnapshot}</span>
-              <span>{item.quantity}</span>
-              <span>{item.lineTotal.toLocaleString()}</span>
-            </div>
-          ))}
+          <div className="info-row">
+            <span>Date:</span>
+            <span>{dateStr}</span>
+          </div>
+          <div className="info-row">
+            <span>Time:</span>
+            <span>{timeStr}</span>
+          </div>
         </div>
 
-        <div className="receipt-divider"></div>
+        <div className="customer-section">
+          <div style={{ fontWeight: 'bold', marginBottom: '1mm' }}>CUSTOMER</div>
+          <div>Name: {order.customerNameSnapshot}</div>
+          <div>Phone: {order.phoneSnapshot}</div>
+          <div>Address:</div>
+          <div style={{ paddingLeft: '2mm' }}>{order.shippingAddressSnapshot}</div>
+        </div>
 
-        {/* Summary */}
-        <div className="space-y-1">
-          <div className="flex justify-between text-xs">
+        <div className="items-table">
+          <div style={{ fontWeight: 'bold', marginBottom: '1mm' }}>ITEMS</div>
+          <table>
+            <thead>
+              <tr>
+                <th>Code</th>
+                <th>Qty</th>
+                <th>Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {order.items.map((item, i) => (
+                <tr key={i}>
+                  <td>{item.productCodeSnapshot}</td>
+                  <td>{item.quantity}</td>
+                  <td>{item.lineTotal.toLocaleString()}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="totals">
+          <div className="total-row">
             <span>Subtotal</span>
             <span>{order.subtotal.toLocaleString()}</span>
           </div>
-          <div className="flex justify-between text-xs">
+          <div className="total-row">
             <span>Delivery Fee</span>
             <span>{order.deliveryFee.toLocaleString()}</span>
           </div>
-          <div className="receipt-divider"></div>
-          <div className="flex justify-between text-sm font-bold">
+          <div className="total-row grand-total">
             <span>TOTAL</span>
             <span>{order.totalAmount.toLocaleString()}</span>
           </div>
         </div>
 
-        <div className="receipt-divider"></div>
-
-        {/* Payment */}
-        <div className="text-xs mb-2">
-          <p>Payment: {order.paymentMethod}</p>
+        <div className="payment-method">
+          Payment: {order.paymentMethod}
         </div>
 
-        <div className="receipt-divider"></div>
-
-        {/* Footer */}
-        <div className="text-center text-xs mt-2 space-y-1">
-          <p>Facebook: {settings.facebook}</p>
-          <p>Phone: {settings.phone}</p>
-          <p className="mt-2 font-medium">{settings.voucherFooter}</p>
-        </div>
-      </div>
-
-      {/* Preview on screen (wider version) */}
-      <div className="no-print mt-8 max-w-md mx-auto bg-white rounded-xl border border-gray-200 p-6">
-        <h2 className="text-center font-bold text-lg mb-1">{settings.businessName}</h2>
-        <p className="text-center text-sm text-gray-500 mb-4">Voucher: {order.voucherNumber}</p>
-
-        <div className="space-y-3 text-sm">
-          <div className="border-b pb-2">
-            <p className="font-medium">{order.customerNameSnapshot}</p>
-            <p className="text-gray-600">{order.phoneSnapshot}</p>
-            <p className="text-gray-600 text-xs">{order.shippingAddressSnapshot}</p>
-          </div>
-
-          <table className="w-full">
-            <thead>
-              <tr className="border-b">
-                <th className="text-left py-1 text-xs text-gray-500">Code</th>
-                <th className="text-center py-1 text-xs text-gray-500">Qty</th>
-                <th className="text-right py-1 text-xs text-gray-500">Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              {order.items.map(item => (
-                <tr key={item.id} className="border-b border-gray-50">
-                  <td className="py-1 font-mono text-[#0057B8]">{item.productCodeSnapshot}</td>
-                  <td className="py-1 text-center">{item.quantity}</td>
-                  <td className="py-1 text-right">{formatCurrency(item.lineTotal)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          <div className="border-t pt-2 space-y-1">
-            <div className="flex justify-between"><span className="text-gray-600">Subtotal</span><span>{formatCurrency(order.subtotal)}</span></div>
-            <div className="flex justify-between"><span className="text-gray-600">Delivery Fee</span><span>{formatCurrency(order.deliveryFee)}</span></div>
-            <div className="flex justify-between font-bold text-lg border-t pt-2"><span>Total</span><span className="text-[#0057B8]">{formatCurrency(order.totalAmount)}</span></div>
-          </div>
-
-          <div className="text-center text-sm text-gray-500 border-t pt-3">
-            <p>Payment: {order.paymentMethod}</p>
-            <p className="mt-2">Facebook: {settings.facebook}</p>
-            <p>Phone: {settings.phone}</p>
-            <p className="mt-2 font-medium">{settings.voucherFooter}</p>
-          </div>
+        <div className="footer">
+          <div>Facebook: {settings.facebook}</div>
+          <div>Phone: {settings.phone}</div>
+          <div style={{ marginTop: '2mm' }}>{settings.voucherFooter}</div>
         </div>
       </div>
     </div>

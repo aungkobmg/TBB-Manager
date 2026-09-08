@@ -1,34 +1,47 @@
 import { useState } from 'react';
+import { Card, Tabs, Table, Typography, Row, Col, Statistic, DatePicker, Space, Tag, Divider } from 'antd';
+import {
+  CalendarOutlined,
+  BarChartOutlined,
+  InboxOutlined,
+  FundOutlined,
+  TeamOutlined,
+  RiseOutlined,
+} from '@ant-design/icons';
 import { getOrders, getProducts, getExpenses, getBales, getCustomers, formatCurrency, formatDate } from '../utils/storage';
 
-export default function Reports() {
-  const [activeReport, setActiveReport] = useState('daily-sales');
-  const [dateFrom, setDateFrom] = useState(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10));
-  const [dateTo, setDateTo] = useState(new Date().toISOString().slice(0, 10));
+const { Title, Text } = Typography;
+const { RangePicker } = DatePicker;
 
+export default function Reports() {
+  const [dateRange, setDateRange] = useState<[any, any] | null>(null);
   const orders = getOrders();
   const products = getProducts();
   const expenses = getExpenses();
   const bales = getBales();
   const customers = getCustomers();
 
-  const filterByDate = (dateStr: string) => dateStr >= dateFrom && dateStr <= dateTo;
+  const getDateFilter = () => {
+    if (!dateRange) return null;
+    const from = dateRange[0]?.format('YYYY-MM-DD');
+    const to = dateRange[1]?.format('YYYY-MM-DD');
+    return { from, to };
+  };
+
+  const filterByDate = (dateStr: string) => {
+    const range = getDateFilter();
+    if (!range) return true;
+    return dateStr >= range.from && dateStr <= range.to;
+  };
 
   const filteredOrders = orders.filter(o => filterByDate(o.orderDate?.slice(0, 10) || '') && o.orderStatus !== 'Cancelled');
   const filteredExpenses = expenses.filter(e => filterByDate(e.expenseDate?.slice(0, 10) || ''));
 
-  const reports = [
-    { id: 'daily-sales', label: 'Daily Sales', icon: 'fa-calendar-day' },
-    { id: 'monthly-sales', label: 'Monthly Sales', icon: 'fa-calendar' },
-    { id: 'inventory', label: 'Inventory Report', icon: 'fa-boxes-stacked' },
-    { id: 'bale-performance', label: 'Bale Performance', icon: 'fa-box' },
-    { id: 'profit-loss', label: 'Profit & Loss', icon: 'fa-chart-line' },
-    { id: 'customer-history', label: 'Customer History', icon: 'fa-users' },
-  ];
-
-  const renderReport = () => {
-    switch (activeReport) {
-      case 'daily-sales': {
+  const tabItems = [
+    {
+      key: 'daily-sales',
+      label: <span><CalendarOutlined /> Daily Sales</span>,
+      children: (() => {
         const byDate: Record<string, { orders: number; revenue: number }> = {};
         filteredOrders.forEach(o => {
           const d = o.orderDate?.slice(0, 10) || '';
@@ -36,24 +49,25 @@ export default function Reports() {
           byDate[d].orders++;
           byDate[d].revenue += o.totalAmount;
         });
-        const sorted = Object.entries(byDate).sort((a, b) => b[0].localeCompare(a[0]));
+        const data = Object.entries(byDate).sort((a, b) => b[0].localeCompare(a[0])).map(([date, info]) => ({ key: date, date, ...info }));
         return (
-          <div>
-            <h3 className="font-semibold mb-3">Daily Sales ({formatDate(dateFrom)} - {formatDate(dateTo)})</h3>
-            <table className="w-full text-sm">
-              <thead><tr className="border-b"><th className="text-left py-2">Date</th><th className="text-right py-2">Orders</th><th className="text-right py-2">Revenue</th></tr></thead>
-              <tbody>
-                {sorted.length === 0 ? <tr><td colSpan={3} className="text-center py-4 text-gray-400">No data</td></tr> :
-                  sorted.map(([date, data]) => (
-                    <tr key={date} className="border-b border-gray-50"><td className="py-2">{formatDate(date)}</td><td className="py-2 text-right">{data.orders}</td><td className="py-2 text-right font-medium">{formatCurrency(data.revenue)}</td></tr>
-                  ))
-                }
-              </tbody>
-            </table>
-          </div>
+          <Table
+            dataSource={data}
+            pagination={{ pageSize: 30 }}
+            columns={[
+              { title: 'Date', dataIndex: 'date', key: 'date', render: (d: string) => formatDate(d) },
+              { title: 'Orders', dataIndex: 'orders', key: 'orders', align: 'center' },
+              { title: 'Revenue', dataIndex: 'revenue', key: 'revenue', align: 'right', render: (v: number) => formatCurrency(v) },
+            ]}
+            locale={{ emptyText: 'No data' }}
+          />
         );
-      }
-      case 'monthly-sales': {
+      })(),
+    },
+    {
+      key: 'monthly-sales',
+      label: <span><BarChartOutlined /> Monthly Sales</span>,
+      children: (() => {
         const byMonth: Record<string, { orders: number; revenue: number }> = {};
         filteredOrders.forEach(o => {
           const m = o.orderDate?.slice(0, 7) || '';
@@ -61,84 +75,99 @@ export default function Reports() {
           byMonth[m].orders++;
           byMonth[m].revenue += o.totalAmount;
         });
-        const sorted = Object.entries(byMonth).sort((a, b) => b[0].localeCompare(a[0]));
+        const data = Object.entries(byMonth).sort((a, b) => b[0].localeCompare(a[0])).map(([month, info]) => ({ key: month, month, ...info }));
         return (
-          <div>
-            <h3 className="font-semibold mb-3">Monthly Sales</h3>
-            <table className="w-full text-sm">
-              <thead><tr className="border-b"><th className="text-left py-2">Month</th><th className="text-right py-2">Orders</th><th className="text-right py-2">Revenue</th></tr></thead>
-              <tbody>
-                {sorted.length === 0 ? <tr><td colSpan={3} className="text-center py-4 text-gray-400">No data</td></tr> :
-                  sorted.map(([month, data]) => (
-                    <tr key={month} className="border-b border-gray-50"><td className="py-2">{month}</td><td className="py-2 text-right">{data.orders}</td><td className="py-2 text-right font-medium">{formatCurrency(data.revenue)}</td></tr>
-                  ))
-                }
-              </tbody>
-            </table>
-          </div>
+          <Table
+            dataSource={data}
+            pagination={false}
+            columns={[
+              { title: 'Month', dataIndex: 'month', key: 'month' },
+              { title: 'Orders', dataIndex: 'orders', key: 'orders', align: 'center' },
+              { title: 'Revenue', dataIndex: 'revenue', key: 'revenue', align: 'right', render: (v: number) => formatCurrency(v) },
+            ]}
+            locale={{ emptyText: 'No data' }}
+          />
         );
-      }
-      case 'inventory': {
+      })(),
+    },
+    {
+      key: 'inventory',
+      label: <span><InboxOutlined /> Inventory</span>,
+      children: (() => {
         const available = products.filter(p => p.status === 'Available');
         const costValue = available.reduce((s, p) => s + p.costPrice, 0);
         const sellValue = available.reduce((s, p) => s + p.sellingPrice, 0);
         return (
           <div>
-            <h3 className="font-semibold mb-3">Inventory Report</h3>
-            <div className="grid grid-cols-3 gap-4 mb-4">
-              <div className="bg-gray-50 p-3 rounded-lg text-center"><p className="text-lg font-bold">{available.length}</p><p className="text-xs text-gray-500">Available</p></div>
-              <div className="bg-gray-50 p-3 rounded-lg text-center"><p className="text-lg font-bold">{formatCurrency(costValue)}</p><p className="text-xs text-gray-500">Cost Value</p></div>
-              <div className="bg-gray-50 p-3 rounded-lg text-center"><p className="text-lg font-bold">{formatCurrency(sellValue)}</p><p className="text-xs text-gray-500">Selling Value</p></div>
-            </div>
-            <table className="w-full text-sm">
-              <thead><tr className="border-b"><th className="text-left py-2">Code</th><th className="text-left py-2">Name</th><th className="text-right py-2">Cost</th><th className="text-right py-2">Sell</th><th className="text-center py-2">Status</th></tr></thead>
-              <tbody>
-                {products.slice(0, 50).map(p => (
-                  <tr key={p.id} className="border-b border-gray-50">
-                    <td className="py-2 font-mono text-xs">{p.productCode}</td>
-                    <td className="py-2">{p.productName}</td>
-                    <td className="py-2 text-right">{formatCurrency(p.costPrice)}</td>
-                    <td className="py-2 text-right">{formatCurrency(p.sellingPrice)}</td>
-                    <td className="py-2 text-center"><span className={`text-xs px-2 py-0.5 rounded ${p.status === 'Available' ? 'bg-green-100 text-green-700' : p.status === 'Sold' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100'}`}>{p.status}</span></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <Row gutter={16} style={{ marginBottom: 16 }}>
+              <Col xs={8}>
+                <Card size="small"><Statistic title="Available" value={available.length} /></Card>
+              </Col>
+              <Col xs={8}>
+                <Card size="small"><Statistic title="Cost Value" value={costValue} precision={0} formatter={(v) => `${Number(v).toLocaleString()} MMK`} /></Card>
+              </Col>
+              <Col xs={8}>
+                <Card size="small"><Statistic title="Selling Value" value={sellValue} precision={0} formatter={(v) => `${Number(v).toLocaleString()} MMK`} /></Card>
+              </Col>
+            </Row>
+            <Table
+              dataSource={products}
+              rowKey="id"
+              pagination={{ pageSize: 20 }}
+              size="small"
+              columns={[
+                { title: 'Code', dataIndex: 'productCode', key: 'productCode', render: (v: string) => <span style={{ fontFamily: 'monospace' }}>{v}</span> },
+                { title: 'Name', dataIndex: 'productName', key: 'productName' },
+                { title: 'Cost', dataIndex: 'costPrice', key: 'costPrice', align: 'right', render: (v: number) => formatCurrency(v) },
+                { title: 'Sell', dataIndex: 'sellingPrice', key: 'sellingPrice', align: 'right', render: (v: number) => formatCurrency(v) },
+                { title: 'Status', dataIndex: 'status', key: 'status', render: (s: string) => <Tag color={s === 'Available' ? 'green' : s === 'Sold' ? 'blue' : 'default'}>{s}</Tag> },
+              ]}
+            />
           </div>
         );
-      }
-      case 'bale-performance': {
+      })(),
+    },
+    {
+      key: 'bale-performance',
+      label: <span><FundOutlined /> Bale Performance</span>,
+      children: (() => {
+        const data = bales.map(b => {
+          const bProducts = products.filter(p => p.baleId === b.id);
+          const soldProducts = bProducts.filter(p => p.status === 'Sold');
+          const revenue = orders.filter(o => o.orderStatus !== 'Cancelled').reduce((s, o) =>
+            s + o.items.filter(i => bProducts.find(p => p.id === i.productId)).reduce((is, i) => is + i.lineTotal, 0), 0);
+          const cost = soldProducts.reduce((s, p) => s + p.costPrice, 0);
+          return {
+            key: b.id,
+            baleCode: b.baleCode,
+            baleCost: b.baleCost,
+            products: bProducts.length,
+            sold: soldProducts.length,
+            revenue,
+            profit: revenue - cost,
+          };
+        });
         return (
-          <div>
-            <h3 className="font-semibold mb-3">Bale Performance</h3>
-            <table className="w-full text-sm">
-              <thead><tr className="border-b"><th className="text-left py-2">Bale</th><th className="text-right py-2">Cost</th><th className="text-center py-2">Products</th><th className="text-center py-2">Sold</th><th className="text-right py-2">Revenue</th><th className="text-right py-2">Profit</th></tr></thead>
-              <tbody>
-                {bales.length === 0 ? <tr><td colSpan={6} className="text-center py-4 text-gray-400">No bales</td></tr> :
-                  bales.map(b => {
-                    const bProducts = products.filter(p => p.baleId === b.id);
-                    const soldProducts = bProducts.filter(p => p.status === 'Sold');
-                    const revenue = orders.filter(o => o.orderStatus !== 'Cancelled').reduce((s, o) =>
-                      s + o.items.filter(i => bProducts.find(p => p.id === i.productId)).reduce((is, i) => is + i.lineTotal, 0), 0);
-                    const cost = soldProducts.reduce((s, p) => s + p.costPrice, 0);
-                    return (
-                      <tr key={b.id} className="border-b border-gray-50">
-                        <td className="py-2 font-medium">{b.baleCode}</td>
-                        <td className="py-2 text-right">{formatCurrency(b.baleCost)}</td>
-                        <td className="py-2 text-center">{bProducts.length}</td>
-                        <td className="py-2 text-center">{soldProducts.length}</td>
-                        <td className="py-2 text-right">{formatCurrency(revenue)}</td>
-                        <td className="py-2 text-right font-medium text-green-600">{formatCurrency(revenue - cost)}</td>
-                      </tr>
-                    );
-                  })
-                }
-              </tbody>
-            </table>
-          </div>
+          <Table
+            dataSource={data}
+            pagination={false}
+            columns={[
+              { title: 'Bale Code', dataIndex: 'baleCode', key: 'baleCode', render: (v: string) => <span style={{ fontFamily: 'monospace' }}>{v}</span> },
+              { title: 'Cost', dataIndex: 'baleCost', key: 'baleCost', align: 'right', render: (v: number) => formatCurrency(v) },
+              { title: 'Products', dataIndex: 'products', key: 'products', align: 'center' },
+              { title: 'Sold', dataIndex: 'sold', key: 'sold', align: 'center' },
+              { title: 'Revenue', dataIndex: 'revenue', key: 'revenue', align: 'right', render: (v: number) => formatCurrency(v) },
+              { title: 'Profit', dataIndex: 'profit', key: 'profit', align: 'right', render: (v: number) => <Text style={{ color: v >= 0 ? '#52c41a' : '#cf1322' }}>{formatCurrency(v)}</Text> },
+            ]}
+            locale={{ emptyText: 'No bales' }}
+          />
         );
-      }
-      case 'profit-loss': {
+      })(),
+    },
+    {
+      key: 'profit-loss',
+      label: <span><RiseOutlined /> Profit & Loss</span>,
+      children: (() => {
         const revenue = filteredOrders.reduce((s, o) => s + o.totalAmount, 0);
         const productCost = filteredOrders.reduce((s, o) =>
           s + o.items.reduce((is, i) => {
@@ -149,75 +178,72 @@ export default function Reports() {
         const expTotal = filteredExpenses.reduce((s, e) => s + e.amount, 0);
         const netProfit = grossProfit - expTotal;
         return (
-          <div>
-            <h3 className="font-semibold mb-3">Profit & Loss ({formatDate(dateFrom)} - {formatDate(dateTo)})</h3>
-            <div className="space-y-3">
-              <div className="flex justify-between py-2 border-b"><span>Revenue</span><span className="font-medium text-green-600">{formatCurrency(revenue)}</span></div>
-              <div className="flex justify-between py-2 border-b"><span>Product Cost</span><span className="font-medium text-orange-600">-{formatCurrency(productCost)}</span></div>
-              <div className="flex justify-between py-2 border-b font-medium"><span>Gross Profit</span><span className="text-blue-600">{formatCurrency(grossProfit)}</span></div>
-              <div className="flex justify-between py-2 border-b"><span>Operating Expenses</span><span className="font-medium text-red-600">-{formatCurrency(expTotal)}</span></div>
-              <div className="flex justify-between py-3 text-lg font-bold border-t-2"><span>Net Profit</span><span className={netProfit >= 0 ? 'text-green-600' : 'text-red-600'}>{formatCurrency(netProfit)}</span></div>
+          <div style={{ maxWidth: 500 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderBottom: '1px solid #f0f0f0' }}>
+              <Text>Revenue</Text>
+              <Text strong style={{ color: '#52c41a' }}>{formatCurrency(revenue)}</Text>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderBottom: '1px solid #f0f0f0' }}>
+              <Text>Product Cost</Text>
+              <Text strong style={{ color: '#fa8c16' }}>-{formatCurrency(productCost)}</Text>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderBottom: '1px solid #f0f0f0' }}>
+              <Text strong>Gross Profit</Text>
+              <Text strong style={{ color: '#1890ff' }}>{formatCurrency(grossProfit)}</Text>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderBottom: '1px solid #f0f0f0' }}>
+              <Text>Operating Expenses</Text>
+              <Text strong style={{ color: '#cf1322' }}>-{formatCurrency(expTotal)}</Text>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '16px 0', borderTop: '2px solid #000' }}>
+              <Text strong style={{ fontSize: 18 }}>Net Profit</Text>
+              <Text strong style={{ fontSize: 18, color: netProfit >= 0 ? '#389e0d' : '#cf1322' }}>{formatCurrency(netProfit)}</Text>
             </div>
           </div>
         );
-      }
-      case 'customer-history': {
+      })(),
+    },
+    {
+      key: 'customer-history',
+      label: <span><TeamOutlined /> Customer History</span>,
+      children: (() => {
+        const data = customers.map(c => {
+          const cOrders = orders.filter(o => o.customerId === c.id && o.orderStatus !== 'Cancelled');
+          return {
+            key: c.id,
+            name: c.name,
+            phone: c.phone,
+            orders: cOrders.length,
+            total: cOrders.reduce((s, o) => s + o.totalAmount, 0),
+          };
+        }).filter(d => d.orders > 0);
         return (
-          <div>
-            <h3 className="font-semibold mb-3">Customer Purchase History</h3>
-            <table className="w-full text-sm">
-              <thead><tr className="border-b"><th className="text-left py-2">Customer</th><th className="text-right py-2">Orders</th><th className="text-right py-2">Total Spent</th></tr></thead>
-              <tbody>
-                {customers.map(c => {
-                  const cOrders = orders.filter(o => o.customerId === c.id && o.orderStatus !== 'Cancelled');
-                  const total = cOrders.reduce((s, o) => s + o.totalAmount, 0);
-                  if (cOrders.length === 0) return null;
-                  return (
-                    <tr key={c.id} className="border-b border-gray-50">
-                      <td className="py-2">{c.name}</td>
-                      <td className="py-2 text-right">{cOrders.length}</td>
-                      <td className="py-2 text-right font-medium">{formatCurrency(total)}</td>
-                    </tr>
-                  );
-                }).filter(Boolean)}
-              </tbody>
-            </table>
-          </div>
+          <Table
+            dataSource={data}
+            pagination={{ pageSize: 20 }}
+            columns={[
+              { title: 'Customer', dataIndex: 'name', key: 'name' },
+              { title: 'Phone', dataIndex: 'phone', key: 'phone' },
+              { title: 'Orders', dataIndex: 'orders', key: 'orders', align: 'center' },
+              { title: 'Total Spent', dataIndex: 'total', key: 'total', align: 'right', render: (v: number) => formatCurrency(v) },
+            ]}
+            locale={{ emptyText: 'No customer orders' }}
+          />
         );
-      }
-      default: return null;
-    }
-  };
+      })(),
+    },
+  ];
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">Reports</h1>
-
-      {/* Date Filter */}
-      <div className="flex flex-wrap gap-3 mb-4">
-        <div className="flex items-center gap-2">
-          <label className="text-sm text-gray-600">From:</label>
-          <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="px-3 py-1.5 border rounded-lg text-sm" />
-        </div>
-        <div className="flex items-center gap-2">
-          <label className="text-sm text-gray-600">To:</label>
-          <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="px-3 py-1.5 border rounded-lg text-sm" />
-        </div>
+      <div style={{ marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
+        <Title level={3} style={{ margin: 0 }}>Reports</Title>
+        <RangePicker onChange={(dates) => setDateRange(dates as any)} />
       </div>
 
-      {/* Report Tabs */}
-      <div className="flex flex-wrap gap-2 mb-4">
-        {reports.map(r => (
-          <button key={r.id} onClick={() => setActiveReport(r.id)} className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${activeReport === r.id ? 'bg-[#0057B8] text-white' : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'}`}>
-            <i className={`fas ${r.icon} mr-1`}></i>{r.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Report Content */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4">
-        {renderReport()}
-      </div>
+      <Card>
+        <Tabs items={tabItems} />
+      </Card>
     </div>
   );
 }

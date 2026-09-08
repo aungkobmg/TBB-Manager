@@ -1,150 +1,212 @@
 import { useState } from 'react';
+import { Table, Card, Button, Modal, Form, Input, InputNumber, Select, Tag, Space, Typography, Row, Col, Statistic, Tabs, DatePicker } from 'antd';
+import { PlusOutlined, DollarOutlined, ShoppingCartOutlined } from '@ant-design/icons';
 import { useToast, useAuth } from '../App';
-import { getExpenses, createExpense, getOrders, getProducts, formatCurrency, formatDate, logActivity } from '../utils/storage';
+import { getOrders, getProducts, getExpenses, createExpense, formatCurrency, formatDate, logActivity } from '../utils/storage';
+
+const { Title, Text } = Typography;
 
 export default function Finance() {
   const { showToast } = useToast();
   const { user } = useAuth();
   const [expenses, setExpenses] = useState(getExpenses());
-  const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ expenseDate: new Date().toISOString().slice(0, 10), category: '', amount: 0, description: '', reference: '' });
-
-  const orders = getOrders().filter(o => o.orderStatus !== 'Cancelled');
+  const [modalVisible, setModalVisible] = useState(false);
+  const [form] = Form.useForm();
+  const orders = getOrders();
   const products = getProducts();
-  const totalRevenue = orders.reduce((s, o) => s + o.totalAmount, 0);
-  const totalProductCost = orders.reduce((s, o) =>
+
+  const validOrders = orders.filter(o => o.orderStatus !== 'Cancelled');
+  const totalRevenue = validOrders.reduce((s, o) => s + o.totalAmount, 0);
+  const totalProductCost = validOrders.reduce((s, o) =>
     s + o.items.reduce((is, i) => {
-      const product = products.find(p => p.id === i.productId);
-      return is + (product?.costPrice || 0) * i.quantity;
+      const p = products.find(pr => pr.id === i.productId);
+      return is + (p?.costPrice || 0) * i.quantity;
     }, 0), 0);
   const grossProfit = totalRevenue - totalProductCost;
   const totalExpenses = expenses.reduce((s, e) => s + e.amount, 0);
   const netProfit = grossProfit - totalExpenses;
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!form.category || !form.amount) { showToast('Please fill required fields.', 'error'); return; }
-    const exp = createExpense(form);
-    logActivity(user!.userId, 'Expense Created', 'expense', exp.id, `Expense: ${form.category} - ${formatCurrency(form.amount)}`);
-    showToast('Expense added.');
+  const handleSubmit = (values: any) => {
+    const expense = createExpense(values);
+    logActivity(user!.userId, 'Expense Created', 'expense', expense.id, `Created expense: ${values.category} - ${formatCurrency(values.amount)}`);
+    showToast('Expense added successfully');
     setExpenses(getExpenses());
-    setShowForm(false);
-    setForm({ expenseDate: new Date().toISOString().slice(0, 10), category: '', amount: 0, description: '', reference: '' });
+    setModalVisible(false);
+    form.resetFields();
   };
 
-  const sortedExpenses = [...expenses].sort((a, b) => new Date(b.expenseDate).getTime() - new Date(a.expenseDate).getTime());
+  const expenseColumns = [
+    {
+      title: 'Date',
+      dataIndex: 'expenseDate',
+      key: 'expenseDate',
+      render: (date: string) => formatDate(date),
+    },
+    {
+      title: 'Category',
+      dataIndex: 'category',
+      key: 'category',
+      render: (category: string) => <Tag>{category}</Tag>,
+    },
+    {
+      title: 'Description',
+      dataIndex: 'description',
+      key: 'description',
+    },
+    {
+      title: 'Reference',
+      dataIndex: 'reference',
+      key: 'reference',
+      responsive: ['md' as const],
+    },
+    {
+      title: 'Amount',
+      dataIndex: 'amount',
+      key: 'amount',
+      align: 'right' as const,
+      render: (amount: number) => <Text type="danger" strong>{formatCurrency(amount)}</Text>,
+    },
+  ];
+
+  const tabItems = [
+    {
+      key: 'overview',
+      label: 'Overview',
+      children: (
+        <div>
+          <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+            <Col xs={24} sm={12} lg={6}>
+              <Card>
+                <Statistic
+                  title="Total Revenue"
+                  value={totalRevenue}
+                  precision={0}
+                  valueStyle={{ color: '#52c41a' }}
+                  prefix={<DollarOutlined />}
+                  formatter={(value) => `${Number(value).toLocaleString()} MMK`}
+                />
+              </Card>
+            </Col>
+            <Col xs={24} sm={12} lg={6}>
+              <Card>
+                <Statistic
+                  title="Product Cost"
+                  value={totalProductCost}
+                  precision={0}
+                  valueStyle={{ color: '#fa8c16' }}
+                  formatter={(value) => `${Number(value).toLocaleString()} MMK`}
+                />
+              </Card>
+            </Col>
+            <Col xs={24} sm={12} lg={6}>
+              <Card>
+                <Statistic
+                  title="Gross Profit"
+                  value={grossProfit}
+                  precision={0}
+                  valueStyle={{ color: '#1890ff' }}
+                  formatter={(value) => `${Number(value).toLocaleString()} MMK`}
+                />
+              </Card>
+            </Col>
+            <Col xs={24} sm={12} lg={6}>
+              <Card>
+                <Statistic
+                  title="Net Profit"
+                  value={netProfit}
+                  precision={0}
+                  valueStyle={{ color: netProfit >= 0 ? '#389e0d' : '#cf1322' }}
+                  formatter={(value) => `${Number(value).toLocaleString()} MMK`}
+                />
+              </Card>
+            </Col>
+          </Row>
+
+          <Row gutter={[16, 16]}>
+            <Col xs={24} sm={12}>
+              <Card>
+                <Statistic title="Total Orders" value={validOrders.length} />
+              </Card>
+            </Col>
+            <Col xs={24} sm={12}>
+              <Card>
+                <Statistic title="Total Expenses" value={totalExpenses} precision={0} valueStyle={{ color: '#cf1322' }} formatter={(value) => `${Number(value).toLocaleString()} MMK`} />
+              </Card>
+            </Col>
+          </Row>
+        </div>
+      ),
+    },
+    {
+      key: 'expenses',
+      label: 'Expenses',
+      children: (
+        <div>
+          <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Text strong>Expense Records</Text>
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalVisible(true)}>
+              Add Expense
+            </Button>
+          </div>
+          <Table
+            columns={expenseColumns}
+            dataSource={[...expenses].sort((a, b) => new Date(b.expenseDate).getTime() - new Date(a.expenseDate).getTime())}
+            rowKey="id"
+            pagination={{ pageSize: 20, showSizeChanger: true }}
+            locale={{ emptyText: 'No expenses yet' }}
+          />
+        </div>
+      ),
+    },
+  ];
 
   return (
     <div>
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Finance</h1>
-        <button onClick={() => setShowForm(true)} className="bg-[#0057B8] text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#003d82]">
-          <i className="fas fa-plus mr-2"></i>Add Expense
-        </button>
+      <div style={{ marginBottom: 24 }}>
+        <Title level={3} style={{ margin: 0 }}>Finance</Title>
       </div>
 
-      {/* Financial Summary */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <p className="text-xs text-gray-500">Total Revenue</p>
-          <p className="text-xl font-bold text-green-600">{formatCurrency(totalRevenue)}</p>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <p className="text-xs text-gray-500">Product Cost</p>
-          <p className="text-xl font-bold text-orange-600">{formatCurrency(totalProductCost)}</p>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <p className="text-xs text-gray-500">Gross Profit</p>
-          <p className="text-xl font-bold text-blue-600">{formatCurrency(grossProfit)}</p>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <p className="text-xs text-gray-500">Total Expenses</p>
-          <p className="text-xl font-bold text-red-600">{formatCurrency(totalExpenses)}</p>
-        </div>
-      </div>
+      <Card>
+        <Tabs items={tabItems} />
+      </Card>
 
-      <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
-        <div className="flex justify-between items-center">
-          <div>
-            <p className="text-sm text-gray-500">Net Profit</p>
-            <p className={`text-2xl font-bold ${netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>{formatCurrency(netProfit)}</p>
-          </div>
-          <div className="text-right text-sm text-gray-500">
-            <p>Gross Profit - Expenses</p>
-            <p>{formatCurrency(grossProfit)} - {formatCurrency(totalExpenses)}</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Expenses List */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
-        <div className="p-4 border-b border-gray-100">
-          <h2 className="font-semibold text-gray-900">Expenses</h2>
-        </div>
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 border-b border-gray-200">
-            <tr>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">Date</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">Category</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600 hidden md:table-cell">Description</th>
-              <th className="text-right px-4 py-3 font-medium text-gray-600">Amount</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {sortedExpenses.length === 0 ? (
-              <tr><td colSpan={4} className="text-center py-8 text-gray-400">No expenses recorded</td></tr>
-            ) : sortedExpenses.map(e => (
-              <tr key={e.id} className="hover:bg-gray-50">
-                <td className="px-4 py-3 text-gray-600">{formatDate(e.expenseDate)}</td>
-                <td className="px-4 py-3 text-gray-900">{e.category}</td>
-                <td className="px-4 py-3 text-gray-600 hidden md:table-cell">{e.description}</td>
-                <td className="px-4 py-3 text-right font-medium text-red-600">{formatCurrency(e.amount)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Form Modal */}
-      {showForm && (
-        <div className="modal-overlay" onClick={() => setShowForm(false)}>
-          <div className="bg-white rounded-xl p-6 w-full max-w-md mx-4" onClick={e => e.stopPropagation()}>
-            <h2 className="text-lg font-semibold mb-4">Add Expense</h2>
-            <form onSubmit={handleSubmit} className="space-y-3">
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Date *</label>
-                <input type="date" value={form.expenseDate} onChange={e => setForm({...form, expenseDate: e.target.value})} className="w-full px-3 py-2 border rounded-lg text-sm" required />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Category *</label>
-                <select value={form.category} onChange={e => setForm({...form, category: e.target.value})} className="w-full px-3 py-2 border rounded-lg text-sm" required>
-                  <option value="">Select...</option>
-                  <option value="Bale Purchase">Bale Purchase</option>
-                  <option value="Delivery Cost">Delivery Cost</option>
-                  <option value="Packaging Cost">Packaging Cost</option>
-                  <option value="Miscellaneous">Miscellaneous</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Amount (MMK) *</label>
-                <input type="number" value={form.amount} onChange={e => setForm({...form, amount: +e.target.value})} className="w-full px-3 py-2 border rounded-lg text-sm" required />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Description</label>
-                <input type="text" value={form.description} onChange={e => setForm({...form, description: e.target.value})} className="w-full px-3 py-2 border rounded-lg text-sm" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Reference</label>
-                <input type="text" value={form.reference} onChange={e => setForm({...form, reference: e.target.value})} className="w-full px-3 py-2 border rounded-lg text-sm" />
-              </div>
-              <div className="flex gap-3 pt-2">
-                <button type="submit" className="flex-1 bg-[#0057B8] text-white py-2 rounded-lg text-sm font-medium hover:bg-[#003d82]">Add Expense</button>
-                <button type="button" onClick={() => setShowForm(false)} className="flex-1 bg-gray-100 text-gray-700 py-2 rounded-lg text-sm font-medium hover:bg-gray-200">Cancel</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {/* Add Expense Modal */}
+      <Modal
+        title="Add Expense"
+        open={modalVisible}
+        onCancel={() => { setModalVisible(false); form.resetFields(); }}
+        footer={null}
+        width={500}
+      >
+        <Form form={form} layout="vertical" onFinish={handleSubmit}>
+          <Form.Item name="expenseDate" label="Date" rules={[{ required: true, message: 'Please select date' }]}>
+            <Input type="date" />
+          </Form.Item>
+          <Form.Item name="category" label="Category" rules={[{ required: true, message: 'Please select category' }]}>
+            <Select placeholder="Select category">
+              <Select.Option value="Bale Purchase">Bale Purchase</Select.Option>
+              <Select.Option value="Delivery Cost">Delivery Cost</Select.Option>
+              <Select.Option value="Packaging Cost">Packaging Cost</Select.Option>
+              <Select.Option value="Miscellaneous">Miscellaneous</Select.Option>
+            </Select>
+          </Form.Item>
+          <Form.Item name="amount" label="Amount (MMK)" rules={[{ required: true, message: 'Please enter amount' }]}>
+            <InputNumber style={{ width: '100%' }} min={0} />
+          </Form.Item>
+          <Form.Item name="description" label="Description">
+            <Input.TextArea rows={2} />
+          </Form.Item>
+          <Form.Item name="reference" label="Reference">
+            <Input placeholder="Optional reference number" />
+          </Form.Item>
+          <Form.Item style={{ marginBottom: 0, textAlign: 'right' }}>
+            <Space>
+              <Button onClick={() => { setModalVisible(false); form.resetFields(); }}>Cancel</Button>
+              <Button type="primary" htmlType="submit">Add Expense</Button>
+            </Space>
+          </Form.Item>
+        </Form>
+      </Modal>
     </div>
   );
 }
