@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Table, Button, Modal, Form, Input, InputNumber, Select, Tag, Space, Card, Row, Col, Statistic, Typography } from 'antd';
 import { PlusOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
 import { useToast, useAuth } from '../App';
@@ -7,6 +8,7 @@ import { getBales, createBale, updateBale, getProducts, formatCurrency, formatDa
 const { Title } = Typography;
 
 export default function Bales() {
+  const navigate = useNavigate();
   const { showToast } = useToast();
   const { user } = useAuth();
   const [bales, setBales] = useState(getBales());
@@ -165,6 +167,10 @@ export default function Bales() {
           rowKey="id"
           pagination={{ pageSize: 10, showSizeChanger: true }}
           locale={{ emptyText: 'No bales yet' }}
+          onRow={(record) => ({
+            onClick: () => navigate(`/bales/${record.id}`),
+            style: { cursor: 'pointer' },
+          })}
         />
       </Card>
 

@@ -24,7 +24,9 @@ import { initializeApp, getSession, clearSession, logActivity } from './utils/st
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Bales from './pages/Bales';
+import BaleDetail from './pages/BaleDetail';
 import Inventory from './pages/Inventory';
+import ProductDetail from './pages/ProductDetail';
 import Customers from './pages/Customers';
 import QuickOrder from './pages/QuickOrder';
 import Orders from './pages/Orders';
@@ -33,6 +35,7 @@ import VoucherView from './pages/VoucherView';
 import Finance from './pages/Finance';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
+import ChangePassword from './pages/ChangePassword';
 import ActivityLogs from './pages/ActivityLogs';
 
 const { Header, Sider, Content } = Layout;
@@ -218,7 +221,9 @@ function AppLayout() {
               <Routes>
                 <Route path="/" element={<Dashboard />} />
                 <Route path="/bales" element={<Bales />} />
+                <Route path="/bales/:id" element={<BaleDetail />} />
                 <Route path="/inventory" element={<Inventory />} />
+                <Route path="/products/:id" element={<ProductDetail />} />
                 <Route path="/customers" element={<Customers />} />
                 <Route path="/quick-order" element={<QuickOrder />} />
                 <Route path="/orders" element={<Orders />} />
@@ -227,6 +232,7 @@ function AppLayout() {
                 <Route path="/finance" element={<Finance />} />
                 <Route path="/reports" element={<Reports />} />
                 <Route path="/settings" element={<Settings />} />
+                <Route path="/change-password" element={<ChangePassword />} />
                 <Route path="/activity-logs" element={<ActivityLogs />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Table, Button, Modal, Form, Input, InputNumber, Select, Tag, Space, Card, Row, Col, Statistic, Typography, Input as AntInput } from 'antd';
 import { PlusOutlined, EditOutlined, SearchOutlined } from '@ant-design/icons';
 import { useToast, useAuth } from '../App';
@@ -8,6 +9,7 @@ const { Title } = Typography;
 const { Search } = AntInput;
 
 export default function Inventory() {
+  const navigate = useNavigate();
   const { showToast } = useToast();
   const { user } = useAuth();
   const [products, setProducts] = useState(getProducts());
@@ -213,6 +215,10 @@ export default function Inventory() {
           pagination={{ pageSize: 20, showSizeChanger: true, showTotal: (total) => `Total ${total} products` }}
           locale={{ emptyText: 'No products found' }}
           scroll={{ x: 800 }}
+          onRow={(record) => ({
+            onClick: () => navigate(`/products/${record.id}`),
+            style: { cursor: 'pointer' },
+          })}
         />
       </Card>
 
