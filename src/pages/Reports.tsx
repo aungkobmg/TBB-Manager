@@ -7,6 +7,7 @@ import {
   FundOutlined,
   TeamOutlined,
   RiseOutlined,
+  FileTextOutlined,
 } from '@ant-design/icons';
 import { getOrders, getProducts, getExpenses, getBales, getCustomers, formatCurrency, formatDate } from '../utils/storage';
 
@@ -228,6 +229,54 @@ export default function Reports() {
               { title: 'Total Spent', dataIndex: 'total', key: 'total', align: 'right', render: (v: number) => formatCurrency(v) },
             ]}
             locale={{ emptyText: 'No customer orders' }}
+          />
+        );
+      })(),
+    },
+    {
+      key: 'voucher-history',
+      label: <span><FileTextOutlined /> Voucher History</span>,
+      children: (() => {
+        const allOrders = orders.filter(o => o.voucherNumber);
+        const data = allOrders
+          .filter(o => filterByDate(o.orderDate?.slice(0, 10) || ''))
+          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+          .map(o => ({
+            key: o.id,
+            voucherNumber: o.voucherNumber,
+            date: o.orderDate,
+            customer: o.customerNameSnapshot,
+            phone: o.phoneSnapshot,
+            items: o.items.length,
+            total: o.totalAmount,
+            status: o.orderStatus,
+            payment: o.paymentMethod,
+          }));
+        return (
+          <Table
+            dataSource={data}
+            pagination={{ pageSize: 20, showSizeChanger: true }}
+            columns={[
+              { title: 'Voucher No.', dataIndex: 'voucherNumber', key: 'voucherNumber', render: (v: string) => <Text strong style={{ fontFamily: 'monospace', color: '#0057B8' }}>{v}</Text> },
+              { title: 'Date', dataIndex: 'date', key: 'date', render: (d: string) => formatDate(d) },
+              { title: 'Customer', dataIndex: 'customer', key: 'customer' },
+              { title: 'Items', dataIndex: 'items', key: 'items', align: 'center' },
+              { title: 'Total', dataIndex: 'total', key: 'total', align: 'right', render: (v: number) => formatCurrency(v) },
+              { title: 'Payment', dataIndex: 'payment', key: 'payment' },
+              {
+                title: 'Status',
+                dataIndex: 'status',
+                key: 'status',
+                render: (s: string) => {
+                  const colors: Record<string, string> = {
+                    Pending: 'gold', Confirmed: 'blue', Packed: 'purple',
+                    Shipped: 'cyan', Delivered: 'green', Cancelled: 'red',
+                  };
+                  return <Tag color={colors[s]}>{s}</Tag>;
+                },
+              },
+            ]}
+            locale={{ emptyText: 'No vouchers' }}
           />
         );
       })(),
