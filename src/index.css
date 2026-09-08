@@ -1,0 +1,191 @@
+/* TBB OS - The Bra Boutique Operating System */
+/* Ant Design is the primary UI framework */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+/* Thermal Receipt Print Styles - 80mm */
+@media print {
+  @page {
+    size: 80mm auto;
+    margin: 0;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  .thermal-receipt,
+  .thermal-receipt * {
+    visibility: visible;
+  }
+
+  .thermal-receipt {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 80mm;
+    padding: 3mm;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    line-height: 1.3;
+    color: #000;
+  }
+
+  .thermal-receipt .receipt-header {
+    text-align: center;
+    margin-bottom: 4mm;
+    border-bottom: 1px dashed #000;
+    padding-bottom: 3mm;
+  }
+
+  .thermal-receipt .business-name {
+    font-size: 14px;
+    font-weight: bold;
+    margin-bottom: 1mm;
+  }
+
+  .thermal-receipt .receipt-info {
+    margin-bottom: 3mm;
+  }
+
+  .thermal-receipt .info-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 1mm;
+  }
+
+  .thermal-receipt .customer-section {
+    margin-bottom: 3mm;
+    border-bottom: 1px dashed #000;
+    padding-bottom: 3mm;
+  }
+
+  .thermal-receipt .items-table {
+    width: 100%;
+    margin-bottom: 3mm;
+    border-bottom: 1px dashed #000;
+    padding-bottom: 3mm;
+  }
+
+  .thermal-receipt .items-table table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .thermal-receipt .items-table th,
+  .thermal-receipt .items-table td {
+    padding: 1mm 0;
+    text-align: left;
+  }
+
+  .thermal-receipt .items-table th:nth-child(2),
+  .thermal-receipt .items-table td:nth-child(2) {
+    text-align: center;
+  }
+
+  .thermal-receipt .items-table th:nth-child(3),
+  .thermal-receipt .items-table td:nth-child(3) {
+    text-align: right;
+  }
+
+  .thermal-receipt .totals {
+    margin-bottom: 3mm;
+    border-bottom: 1px dashed #000;
+    padding-bottom: 3mm;
+  }
+
+  .thermal-receipt .total-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 1mm;
+  }
+
+  .thermal-receipt .total-row.grand-total {
+    font-size: 13px;
+    font-weight: bold;
+    margin-top: 2mm;
+  }
+
+  .thermal-receipt .payment-method {
+    margin-bottom: 3mm;
+    text-align: center;
+  }
+
+  .thermal-receipt .footer {
+    text-align: center;
+    font-size: 10px;
+    margin-top: 3mm;
+    border-top: 1px dashed #000;
+    padding-top: 3mm;
+  }
+
+  /* Hide all Ant Design UI elements when printing */
+  .ant-layout-sider,
+  .ant-layout-header,
+  .ant-btn,
+  .no-print {
+    display: none !important;
+  }
+}
+
+/* Utility classes */
+.text-center {
+  text-align: center;
+}
+
+.text-right {
+  text-align: right;
+}
+
+.font-mono {
+  font-family: 'Courier New', monospace;
+}
+
+/* Custom modal overlay for non-AntD modals */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
