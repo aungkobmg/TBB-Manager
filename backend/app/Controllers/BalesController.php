@@ -217,6 +217,118 @@ class BalesController
         Response::success($bale, 'Bale updated');
     }
 
+    /**
+     * POST /bales/{id}/products/bulk
+     * Bulk create products for a bale
+     */
+    public function bulkCreateProducts(array $params, array $input, ?array $user): void
+    {
+        $baleId = (int) $params['id'];
+        $products = $input['products'] ?? [];
+
+        if (empty($products)) {
+            Response::error('No products provided', 400);
+            return;
+        }
+
+        $db = Database::getConnection();
+
+        // Check if bale exists and is not closed
+        $stmt = $db->prepare('SELECT id, status FROM bales WHERE id = ?');
+        $stmt->execute([$baleId]);
+        $bale = $stmt->fetch();
+
+        if (!$bale) {
+            Response::error('Bale not found', 404);
+            return;
+        }
+
+        if ($bale['status'] === 'Closed') {
+            Response::error('Cannot add products to a closed bale', 400);
+            return;
+        }
+
+        // Validate all products first
+        $errors = [];
+        foreach ($products as $index => $product) {
+            if (empty($product['productName'])) {
+                $errors[] = "Row " . ($index + 1) . ": Product name is required";
+            }
+            if (!isset($product['costPrice']) || $product['costPrice'] < 0) {
+                $errors[] = "Row " . ($index + 1) . ": Invalid cost price";
+            }
+            if (!isset($product['sellingPrice']) || $product['sellingPrice'] < 0) {
+                $errors[] = "Row " . ($index + 1) . ": Invalid selling price";
+            }
+        }
+
+        if (!empty($errors)) {
+            Response::error('Validation failed', 400, $errors);
+            return;
+        }
+
+        // Use transaction for atomic operation
+        $db->beginTransaction();
+
+        try {
+            $createdProducts = [];
+
+            foreach ($products as $product) {
+                // Generate product code atomically using sequence table
+                $stmt = $db->query("UPDATE sequences SET current_value = LAST_INSERT_ID(current_value + 1) WHERE name = 'product_code'");
+                $stmt = $db->query("SELECT LAST_INSERT_ID()");
+                $nextNum = (int) $stmt->fetchColumn();
+                $productCode = sprintf('TBB-%06d', $nextNum);
+
+                $stmt = $db->prepare('
+                    INSERT INTO products (product_code, product_name, brand, category, size, color, condition_grade, cost_price, selling_price, bale_id, status)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ');
+                $stmt->execute([
+                    $productCode,
+                    $product['productName'],
+                    $product['brand'] ?? null,
+                    $product['category'] ?? null,
+                    $product['size'] ?? null,
+                    $product['color'] ?? null,
+                    $product['condition'] ?? 'A',
+                    (float) $product['costPrice'],
+                    (float) $product['sellingPrice'],
+                    $baleId,
+                    'Available',
+                ]);
+
+                $productId = (int) $db->lastInsertId();
+
+                // Log movement
+                $stmt = $db->prepare('
+                    INSERT INTO product_movements (product_id, from_status, to_status, order_id, reason, created_by)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                ');
+                $stmt->execute([$productId, null, 'Available', null, 'Product created via bulk import', $user['id']]);
+
+                $createdProducts[] = [
+                    'id' => $productId,
+                    'product_code' => $productCode,
+                    'product_name' => $product['productName'],
+                ];
+            }
+
+            $db->commit();
+
+            $this->logActivity($user['id'], 'Bulk Products Created', 'bale', $baleId, "Created " . count($createdProducts) . " products");
+
+            Response::success([
+                'count' => count($createdProducts),
+                'products' => $createdProducts,
+            ], 'Products created successfully');
+
+        } catch (Exception $e) {
+            $db->rollBack();
+            Response::error('Failed to create products: ' . $e->getMessage(), 500);
+        }
+    }
+
     private function logActivity(int $userId, string $action, string $entityType, ?int $entityId, string $description): void
     {
         try {

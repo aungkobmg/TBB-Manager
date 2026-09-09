@@ -106,6 +106,7 @@ require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../app/Helpers/Response.php';
 require_once __DIR__ . '/../app/Helpers/Auth.php';
 require_once __DIR__ . '/../app/Helpers/CSRF.php';
+require_once __DIR__ . '/../app/Helpers/RBAC.php';
 
 // Parse request
 $method = $_SERVER['REQUEST_METHOD'];
@@ -140,6 +141,7 @@ $routes = [
     'GET /bales/{id}'          => ['BalesController', 'show', true],
     'POST /bales'              => ['BalesController', 'store', true],
     'PUT /bales/{id}'          => ['BalesController', 'update', true],
+    'POST /bales/{id}/products/bulk' => ['BalesController', 'bulkCreateProducts', true],
 
     // Products
     'GET /products'            => ['ProductsController', 'index', true],
@@ -176,6 +178,7 @@ $routes = [
     'GET /reports/daily-sales'     => ['ReportsController', 'dailySales', true],
     'GET /reports/monthly-sales'   => ['ReportsController', 'monthlySales', true],
     'GET /reports/inventory'       => ['ReportsController', 'inventory', true],
+    'GET /reports/inventory-valuation' => ['ReportsController', 'inventoryValuation', true],
     'GET /reports/bale-performance' => ['ReportsController', 'balePerformance', true],
     'GET /reports/profit-loss'     => ['ReportsController', 'profitLoss', true],
     'GET /reports/customer-history' => ['ReportsController', 'customerHistory', true],
@@ -218,6 +221,9 @@ foreach ($routes as $pattern => $handler) {
             if (CSRF::requiresValidation($method)) {
                 CSRF::validateRequest();
             }
+            
+            // RBAC authorization check
+            RBAC::enforce($method, $uri, $user);
         } else {
             $user = null;
         }

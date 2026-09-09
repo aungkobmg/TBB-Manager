@@ -3,7 +3,9 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Card, Button, Typography, message, Spin, Space } from 'antd';
 import { ArrowLeftOutlined, PrinterOutlined } from '@ant-design/icons';
 import { fetchOrder, formatCurrency, formatDate } from '../utils/storage';
+import { settingsApi } from '../api/services';
 import type { Order } from '../utils/storage';
+import type { Settings } from '../utils/storage';
 
 const { Title, Text } = Typography;
 
@@ -11,12 +13,19 @@ export default function VoucherView() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [order, setOrder] = useState<Order | null>(null);
+  const [settings, setSettings] = useState<Settings | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (id) {
-      fetchOrder(Number(id))
-        .then((res: any) => setOrder(res))
+      Promise.all([
+        fetchOrder(Number(id)),
+        settingsApi.get()
+      ])
+        .then(([orderRes, settingsRes]) => {
+          setOrder(orderRes);
+          setSettings(settingsRes.data);
+        })
         .catch(() => message.error('Failed to load voucher'))
         .finally(() => setLoading(false));
     }

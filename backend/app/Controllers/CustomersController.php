@@ -145,6 +145,50 @@ class CustomersController
         }
 
         $db = Database::getConnection();
+
+        // Check for potential duplicates
+        $duplicates = [];
+        
+        $phone = trim($input['phone'] ?? '');
+        $facebookName = trim($input['facebookName'] ?? '');
+        
+        if ($phone !== '') {
+            $stmt = $db->prepare('SELECT id, name, phone FROM customers WHERE phone = ? AND archived_at IS NULL');
+            $stmt->execute([$phone]);
+            $phoneMatch = $stmt->fetch();
+            if ($phoneMatch) {
+                $duplicates[] = [
+                    'id' => $phoneMatch['id'],
+                    'name' => $phoneMatch['name'],
+                    'match_field' => 'phone',
+                    'match_value' => $phone
+                ];
+            }
+        }
+
+        if ($facebookName !== '') {
+            $stmt = $db->prepare('SELECT id, name, facebook_name FROM customers WHERE facebook_name = ? AND archived_at IS NULL');
+            $stmt->execute([$facebookName]);
+            $fbMatch = $stmt->fetch();
+            if ($fbMatch) {
+                $duplicates[] = [
+                    'id' => $fbMatch['id'],
+                    'name' => $fbMatch['name'],
+                    'match_field' => 'facebook_name',
+                    'match_value' => $facebookName
+                ];
+            }
+        }
+
+        // If duplicates found and not explicitly confirmed, return warning
+        if (!empty($duplicates) && empty($input['confirmDuplicate'])) {
+            Response::error('Potential duplicate customer(s) found', 409, [
+                'duplicates' => $duplicates,
+                'message' => 'Please review and confirm if you want to create this customer anyway.'
+            ]);
+            return;
+        }
+
         $stmt = $db->prepare('
             INSERT INTO customers (name, phone, facebook_name, address, township, city, notes)
             VALUES (?, ?, ?, ?, ?, ?, ?)

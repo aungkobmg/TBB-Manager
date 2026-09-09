@@ -37,11 +37,10 @@ class FinanceController
         $stmt->execute($bindings);
         $revenue = (float) $stmt->fetchColumn();
 
-        // Product cost
-        $sql = "SELECT COALESCE(SUM(p.cost_price * oi.quantity), 0)
+        // Product cost (use historical cost_price_snapshot, not current product cost)
+        $sql = "SELECT COALESCE(SUM(oi.cost_price_snapshot * oi.quantity), 0)
                 FROM order_items oi
                 JOIN orders o ON oi.order_id = o.id
-                JOIN products p ON oi.product_id = p.id
                 WHERE o.order_status != 'Cancelled' {$dateFilter}";
         $stmt = $db->prepare($sql);
         $stmt->execute($bindings);
