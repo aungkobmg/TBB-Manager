@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
-import { Layout, Menu, ConfigProvider, theme, message, Button, Dropdown, Space } from 'antd';
+import { Layout, Menu, ConfigProvider, theme, message, Button, Dropdown, Space, Spin } from 'antd';
 import type { MenuProps } from 'antd';
 import {
   DashboardOutlined,
@@ -18,235 +18,188 @@ import {
   MenuFoldOutlined,
   MenuUnfoldOutlined,
 } from '@ant-design/icons';
-import { initializeApp, getSession, clearSession, logActivity } from './utils/storage';
+import { authApi } from './api/services';
+import { ApiError } from './api/client';
+import type { User } from './api/services';
 
-// Pages
-import Login from './pages/Login';
-import Dashboard from './pages/Dashboard';
-import Bales from './pages/Bales';
-import BaleDetail from './pages/BaleDetail';
-import Inventory from './pages/Inventory';
-import ProductDetail from './pages/ProductDetail';
-import Customers from './pages/Customers';
-import QuickOrder from './pages/QuickOrder';
-import Orders from './pages/Orders';
-import OrderDetail from './pages/OrderDetail';
-import VoucherView from './pages/VoucherView';
-import Finance from './pages/Finance';
-import Reports from './pages/Reports';
-import Settings from './pages/Settings';
-import ChangePassword from './pages/ChangePassword';
-import ActivityLogs from './pages/ActivityLogs';
+// Lazy load pages for code splitting
+const Login = lazy(() => import('./pages/Login'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Bales = lazy(() => import('./pages/Bales'));
+const BaleDetail = lazy(() => import('./pages/BaleDetail'));
+const Inventory = lazy(() => import('./pages/Inventory'));
+const ProductDetail = lazy(() => import('./pages/ProductDetail'));
+const Customers = lazy(() => import('./pages/Customers'));
+const QuickOrder = lazy(() => import('./pages/QuickOrder'));
+const Orders = lazy(() => import('./pages/Orders'));
+const OrderDetail = lazy(() => import('./pages/OrderDetail'));
+const VoucherView = lazy(() => import('./pages/VoucherView'));
+const Finance = lazy(() => import('./pages/Finance'));
+const Reports = lazy(() => import('./pages/Reports'));
+const Settings = lazy(() => import('./pages/Settings'));
+const ChangePassword = lazy(() => import('./pages/ChangePassword'));
+const ActivityLogs = lazy(() => import('./pages/ActivityLogs'));
 
 const { Header, Sider, Content } = Layout;
 
-// Context for toast and auth
 import React from 'react';
 
-interface ToastContextType {
-  showToast: (msg: string, type?: 'success' | 'error' | 'info' | 'warning') => void;
-}
-
 interface AuthContextType {
-  user: { userId: number; username: string } | null;
-  setUser: (user: { userId: number; username: string } | null) => void;
+  user: User | null;
+  setUser: (user: User | null) => void;
+  loading: boolean;
 }
 
-export const ToastContext = React.createContext<ToastContextType>({ showToast: () => {} });
-export const AuthContext = React.createContext<AuthContextType>({ user: null, setUser: () => {} });
-
-export const useToast = () => React.useContext(ToastContext);
+export const AuthContext = React.createContext<AuthContextType>({ user: null, setUser: () => {}, loading: true });
 export const useAuth = () => React.useContext(AuthContext);
 
-// Brand colors for Ant Design theme
+// Brand colors
 const BRAND_PRIMARY = '#0057B8';
 const BRAND_DARK = '#0A1930';
 
 function AppLayout() {
   const [collapsed, setCollapsed] = useState(false);
-  const [user, setUser] = useState<{ userId: number; username: string } | null>(getSession());
+  const { user, setUser, loading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const [messageApi, contextHolder] = message.useMessage();
 
-  const showToast = (msg: string, type: 'success' | 'error' | 'info' | 'warning' = 'success') => {
-    messageApi.open({ type, content: msg });
-  };
-
-  const handleLogout = () => {
-    if (user) {
-      logActivity(user.userId, 'Logout', 'auth', null, `${user.username} logged out`);
+  const handleLogout = async () => {
+    try {
+      await authApi.logout();
+    } catch (err) {
+      // Ignore errors on logout
     }
-    clearSession();
     setUser(null);
     navigate('/login');
   };
 
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+        <Spin size="large" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
   const menuItems: MenuProps['items'] = [
     { key: '/', icon: <DashboardOutlined />, label: 'Dashboard' },
+    { key: '/quick-order', icon: <PlusCircleOutlined />, label: 'Quick Order' },
     { key: '/bales', icon: <InboxOutlined />, label: 'Bales' },
     { key: '/inventory', icon: <TagsOutlined />, label: 'Inventory' },
     { key: '/customers', icon: <UserOutlined />, label: 'Customers' },
-    {
-      key: 'orders-group',
-      icon: <ShoppingCartOutlined />,
-      label: 'Orders',
-      children: [
-        { key: '/quick-order', icon: <PlusCircleOutlined />, label: 'Quick Order' },
-        { key: '/orders', icon: <FileTextOutlined />, label: 'All Orders' },
-      ],
-    },
+    { key: '/orders', icon: <ShoppingCartOutlined />, label: 'Orders' },
     { key: '/finance', icon: <DollarOutlined />, label: 'Finance' },
     { key: '/reports', icon: <BarChartOutlined />, label: 'Reports' },
     { key: '/settings', icon: <SettingOutlined />, label: 'Settings' },
     { key: '/activity-logs', icon: <AuditOutlined />, label: 'Activity Logs' },
   ];
 
-  const handleMenuClick: MenuProps['onClick'] = ({ key }) => {
-    navigate(key);
-  };
-
   const userMenuItems: MenuProps['items'] = [
-    {
-      key: 'logout',
-      icon: <LogoutOutlined />,
-      label: 'Logout',
-      onClick: handleLogout,
-    },
+    { key: 'change-password', icon: <SettingOutlined />, label: 'Change Password' },
+    { type: 'divider' },
+    { key: 'logout', icon: <LogoutOutlined />, label: 'Logout', danger: true },
   ];
 
-  if (!user) {
-    return <Navigate to="/login" replace />;
-  }
+  const handleUserMenuClick: MenuProps['onClick'] = ({ key }) => {
+    if (key === 'logout') {
+      handleLogout();
+    } else if (key === 'change-password') {
+      navigate('/change-password');
+    }
+  };
 
   return (
-    <AuthContext.Provider value={{ user, setUser }}>
-      <ToastContext.Provider value={{ showToast }}>
-        {contextHolder}
-        <Layout style={{ minHeight: '100vh' }}>
-          <Sider
-            collapsible
-            collapsed={collapsed}
-            onCollapse={setCollapsed}
-            trigger={null}
-            style={{
-              overflow: 'auto',
-              height: '100vh',
-              position: 'fixed',
-              left: 0,
-              top: 0,
-              bottom: 0,
-              background: '#fff',
-              borderRight: '1px solid #f0f0f0',
-            }}
-          >
-            <div style={{
-              height: 64,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              borderBottom: '1px solid #f0f0f0',
-              padding: '0 16px',
-            }}>
-              <div style={{
-                width: 32,
-                height: 32,
-                borderRadius: 8,
-                background: BRAND_PRIMARY,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#fff',
-                fontWeight: 'bold',
-                fontSize: 14,
-                marginRight: collapsed ? 0 : 12,
-              }}>
-                TBB
-              </div>
-              {!collapsed && (
-                <span style={{ fontWeight: 600, fontSize: 15, color: BRAND_DARK }}>
-                  TBB OS
-                </span>
-              )}
-            </div>
-            <Menu
-              mode="inline"
-              selectedKeys={[location.pathname]}
-              defaultOpenKeys={['orders-group']}
-              items={menuItems}
-              onClick={handleMenuClick}
-              style={{ borderRight: 0, marginTop: 8 }}
-            />
-          </Sider>
-          <Layout style={{ marginLeft: collapsed ? 80 : 200, transition: 'margin-left 0.2s' }}>
-            <Header style={{
-              padding: '0 24px',
-              background: '#fff',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              borderBottom: '1px solid #f0f0f0',
-              position: 'sticky',
-              top: 0,
-              zIndex: 100,
-              height: 64,
-            }}>
-              <Button
-                type="text"
-                icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-                onClick={() => setCollapsed(!collapsed)}
-                style={{ fontSize: 16 }}
-              />
-              <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
-                <Space style={{ cursor: 'pointer' }}>
-                  <div style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: '50%',
-                    background: BRAND_PRIMARY,
-                    color: '#fff',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontWeight: 600,
-                    fontSize: 13,
-                  }}>
-                    {user.username.charAt(0).toUpperCase()}
-                  </div>
-                  <span style={{ fontSize: 14 }}>{user.username}</span>
-                </Space>
-              </Dropdown>
-            </Header>
-            <Content style={{ margin: 24, minHeight: 280 }}>
-              <Routes>
-                <Route path="/" element={<Dashboard />} />
-                <Route path="/bales" element={<Bales />} />
-                <Route path="/bales/:id" element={<BaleDetail />} />
-                <Route path="/inventory" element={<Inventory />} />
-                <Route path="/products/:id" element={<ProductDetail />} />
-                <Route path="/customers" element={<Customers />} />
-                <Route path="/quick-order" element={<QuickOrder />} />
-                <Route path="/orders" element={<Orders />} />
-                <Route path="/orders/:id" element={<OrderDetail />} />
-                <Route path="/voucher/:id" element={<VoucherView />} />
-                <Route path="/finance" element={<Finance />} />
-                <Route path="/reports" element={<Reports />} />
-                <Route path="/settings" element={<Settings />} />
-                <Route path="/change-password" element={<ChangePassword />} />
-                <Route path="/activity-logs" element={<ActivityLogs />} />
-                <Route path="*" element={<Navigate to="/" replace />} />
-              </Routes>
-            </Content>
-          </Layout>
-        </Layout>
-      </ToastContext.Provider>
-    </AuthContext.Provider>
+    <Layout style={{ minHeight: '100vh' }}>
+      <Sider
+        collapsible
+        collapsed={collapsed}
+        onCollapse={setCollapsed}
+        theme="light"
+        style={{
+          borderRight: '1px solid #f0f0f0',
+        }}
+      >
+        <div style={{ height: 64, display: 'flex', alignItems: 'center', justifyContent: 'center', borderBottom: '1px solid #f0f0f0' }}>
+          {collapsed ? (
+            <span style={{ fontSize: 20, fontWeight: 'bold', color: BRAND_PRIMARY }}>TBB</span>
+          ) : (
+            <span style={{ fontSize: 16, fontWeight: 'bold', color: BRAND_PRIMARY }}>TBB OS</span>
+          )}
+        </div>
+        <Menu
+          mode="inline"
+          selectedKeys={[location.pathname]}
+          items={menuItems}
+          onClick={({ key }) => navigate(key)}
+          style={{ borderRight: 0 }}
+        />
+      </Sider>
+      <Layout>
+        <Header style={{ background: '#fff', padding: '0 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #f0f0f0' }}>
+          <Button
+            type="text"
+            icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+            onClick={() => setCollapsed(!collapsed)}
+          />
+          <Dropdown menu={{ items: userMenuItems, onClick: handleUserMenuClick }} placement="bottomRight">
+            <Space style={{ cursor: 'pointer' }}>
+              <UserOutlined />
+              <span>{user.username}</span>
+            </Space>
+          </Dropdown>
+        </Header>
+        <Content style={{ margin: 24, minHeight: 280 }}>
+          <Suspense fallback={<div style={{ textAlign: 'center', padding: 50 }}><Spin size="large" /></div>}>
+            <Routes>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/bales" element={<Bales />} />
+              <Route path="/bales/:id" element={<BaleDetail />} />
+              <Route path="/inventory" element={<Inventory />} />
+              <Route path="/products/:id" element={<ProductDetail />} />
+              <Route path="/customers" element={<Customers />} />
+              <Route path="/quick-order" element={<QuickOrder />} />
+              <Route path="/orders" element={<Orders />} />
+              <Route path="/orders/:id" element={<OrderDetail />} />
+              <Route path="/voucher/:id" element={<VoucherView />} />
+              <Route path="/finance" element={<Finance />} />
+              <Route path="/reports" element={<Reports />} />
+              <Route path="/settings" element={<Settings />} />
+              <Route path="/change-password" element={<ChangePassword />} />
+              <Route path="/activity-logs" element={<ActivityLogs />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </Suspense>
+        </Content>
+      </Layout>
+    </Layout>
   );
 }
 
-export default function App() {
+function App() {
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+
   useEffect(() => {
-    initializeApp();
+    // Check if user is already authenticated
+    const checkAuth = async () => {
+      try {
+        const response = await authApi.me();
+        if (response.success && response.data) {
+          setUser(response.data);
+        }
+      } catch (err) {
+        // Not authenticated
+        setUser(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    checkAuth();
   }, []);
 
   return (
@@ -254,24 +207,24 @@ export default function App() {
       theme={{
         token: {
           colorPrimary: BRAND_PRIMARY,
-          borderRadius: 8,
-          colorBgContainer: '#ffffff',
-          fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-        },
-        components: {
-          Menu: {
-            itemSelectedBg: '#E6F0FF',
-            itemSelectedColor: BRAND_PRIMARY,
-          },
+          borderRadius: 6,
         },
       }}
     >
-      <Router>
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route path="/*" element={<AppLayout />} />
-        </Routes>
-      </Router>
+      <AuthContext.Provider value={{ user, setUser, loading }}>
+        <Router>
+          <Routes>
+            <Route path="/login" element={
+              <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}><Spin size="large" /></div>}>
+                <Login />
+              </Suspense>
+            } />
+            <Route path="/*" element={<AppLayout />} />
+          </Routes>
+        </Router>
+      </AuthContext.Provider>
     </ConfigProvider>
   );
 }
+
+export default App;

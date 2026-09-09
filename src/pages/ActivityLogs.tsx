@@ -1,98 +1,77 @@
-import { useState } from 'react';
-import { Table, Card, Input, Select, Tag, Typography, Space } from 'antd';
+import { useState, useEffect } from 'react';
+import { Table, Card, Tag, Input, Select, Typography, message, Space } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
-import { getActivityLogs, formatDateTime } from '../utils/storage';
+import { fetchActivityLogs, formatDateTime } from '../utils/storage';
+import type { ActivityLog } from '../utils/storage';
 
-const { Title } = Typography;
+const { Title, Text } = Typography;
 const { Search } = Input;
 
 export default function ActivityLogs() {
+  const [logs, setLogs] = useState<ActivityLog[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
-  const [filterAction, setFilterAction] = useState('');
-  const logs = getActivityLogs();
+  const [actionFilter, setActionFilter] = useState('');
 
-  const filtered = logs.filter(l => {
-    const s = search.toLowerCase();
-    const matchSearch = !s || l.action.toLowerCase().includes(s) || l.description.toLowerCase().includes(s) || l.entityType.toLowerCase().includes(s);
-    const matchAction = !filterAction || l.action === filterAction;
-    return matchSearch && matchAction;
-  }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
-  const actions = [...new Set(logs.map(l => l.action))];
-
-  const getTagColor = (action: string) => {
-    if (action.includes('Created')) return 'green';
-    if (action.includes('Updated')) return 'blue';
-    if (action.includes('Cancelled')) return 'red';
-    if (action.includes('Login') || action.includes('Logout')) return 'purple';
-    return 'default';
+  const loadLogs = async (p = page) => {
+    setLoading(true);
+    try {
+      const res = await fetchActivityLogs({ page: p, limit: 50, search, action: actionFilter || undefined });
+      setLogs(res.data);
+      setTotal(res.total);
+    } catch (err) {
+      message.error('Failed to load activity logs');
+    } finally {
+      setLoading(false);
+    }
   };
 
+  useEffect(() => { loadLogs(); }, [page, search, actionFilter]);
+
   const columns = [
-    {
-      title: 'Time',
-      dataIndex: 'createdAt',
-      key: 'createdAt',
-      width: 180,
-      render: (date: string) => <span style={{ fontSize: 12 }}>{formatDateTime(date)}</span>,
-    },
-    {
-      title: 'Action',
-      dataIndex: 'action',
-      key: 'action',
-      render: (action: string) => <Tag color={getTagColor(action)}>{action}</Tag>,
-    },
-    {
-      title: 'Entity',
-      dataIndex: 'entityType',
-      key: 'entityType',
-      responsive: ['md' as const],
-    },
-    {
-      title: 'Description',
-      dataIndex: 'description',
-      key: 'description',
-      ellipsis: true,
-    },
+    { title: 'Time', dataIndex: 'createdAt', key: 'time', render: (d: string) => formatDateTime(d) },
+    { title: 'User', dataIndex: 'username', key: 'user', render: (u: string) => <Text strong>{u || 'System'}</Text> },
+    { title: 'Action', dataIndex: 'action', key: 'action', render: (a: string) => {
+      let color = 'default';
+      if (a.includes('Created')) color = 'green';
+      else if (a.includes('Updated')) color = 'blue';
+      else if (a.includes('Cancelled')) color = 'red';
+      else if (a.includes('Login') || a.includes('Logout')) color = 'purple';
+      return <Tag color={color}>{a}</Tag>;
+    }},
+    { title: 'Entity', dataIndex: 'entityType', key: 'entity' },
+    { title: 'Description', dataIndex: 'description', key: 'desc' },
   ];
 
   return (
     <div>
-      <div style={{ marginBottom: 24 }}>
-        <Title level={3} style={{ margin: 0 }}>Activity Logs</Title>
-      </div>
+      <Title level={3}>Activity Logs</Title>
 
-      <Card style={{ marginBottom: 16 }}>
-        <Space wrap>
-          <Search
-            placeholder="Search logs..."
-            allowClear
-            onSearch={setSearch}
-            onChange={(e) => setSearch(e.target.value)}
-            prefix={<SearchOutlined />}
-            style={{ width: 300 }}
-          />
-          <Select
-            style={{ width: 200 }}
-            placeholder="Filter by Action"
-            allowClear
-            value={filterAction || undefined}
-            onChange={(value) => setFilterAction(value || '')}
-          >
-            <Select.Option value="">All Actions</Select.Option>
-            {actions.map(a => <Select.Option key={a} value={a}>{a}</Select.Option>)}
-          </Select>
-        </Space>
-      </Card>
+      <Space style={{ marginBottom: 16 }}>
+        <Search placeholder="Search logs..." onSearch={setSearch} style={{ width: 300 }} allowClear />
+        <Select placeholder="Action" style={{ width: 200 }} allowClear onChange={setActionFilter}>
+          <Select.Option value="Login">Login</Select.Option>
+          <Select.Option value="Logout">Logout</Select.Option>
+          <Select.Option value="Product Created">Product Created</Select.Option>
+          <Select.Option value="Product Updated">Product Updated</Select.Option>
+          <Select.Option value="Bale Created">Bale Created</Select.Option>
+          <Select.Option value="Order Created">Order Created</Select.Option>
+          <Select.Option value="Order Cancelled">Order Cancelled</Select.Option>
+          <Select.Option value="Settings Updated">Settings Updated</Select.Option>
+        </Select>
+      </Space>
 
       <Card>
         <Table
           columns={columns}
-          dataSource={filtered}
+          dataSource={logs}
           rowKey="id"
-          pagination={{ pageSize: 50, showSizeChanger: true, showTotal: (total) => `Total ${total} logs` }}
+          loading={loading}
+          pagination={{ current: page, total, pageSize: 50, onChange: setPage }}
           locale={{ emptyText: 'No activity logs' }}
-          size="small"
+          scroll={{ x: 1000 }}
         />
       </Card>
     </div>

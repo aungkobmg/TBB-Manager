@@ -1,165 +1,75 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { Table, Card, Tag, Input, Select, Space, Typography, Row, Col } from 'antd';
-import { SearchOutlined, EyeOutlined } from '@ant-design/icons';
-import { getOrders, formatCurrency, formatDate } from '../utils/storage';
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Table, Card, Tag, Input, Select, Typography, message, Space, Row, Col } from 'antd';
+import { SearchOutlined } from '@ant-design/icons';
+import { fetchOrders, formatCurrency, formatDate } from '../utils/storage';
+import type { Order } from '../utils/storage';
 
-const { Title } = Typography;
+const { Title, Text } = Typography;
 const { Search } = Input;
 
 export default function Orders() {
+  const navigate = useNavigate();
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
-  const [filterStatus, setFilterStatus] = useState('');
-  const [filterPayment, setFilterPayment] = useState('');
-  const orders = getOrders();
+  const [statusFilter, setStatusFilter] = useState('');
 
-  const filtered = orders.filter(o => {
-    const s = search.toLowerCase();
-    const matchSearch = !s || o.voucherNumber.toLowerCase().includes(s) || o.customerNameSnapshot.toLowerCase().includes(s) || o.phoneSnapshot.includes(s);
-    const matchStatus = !filterStatus || o.orderStatus === filterStatus;
-    const matchPayment = !filterPayment || o.paymentMethod === filterPayment;
-    return matchSearch && matchStatus && matchPayment;
-  }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
-  const statusColors: Record<string, string> = {
-    Pending: 'gold',
-    Confirmed: 'blue',
-    Packed: 'purple',
-    Shipped: 'geekblue',
-    Delivered: 'green',
-    Cancelled: 'red',
+  const loadOrders = async (p = page) => {
+    setLoading(true);
+    try {
+      const res = await fetchOrders({ page: p, limit: 20, search, status: statusFilter || undefined });
+      setOrders(res.data);
+      setTotal(res.total);
+    } catch (err) {
+      message.error('Failed to load orders');
+    } finally {
+      setLoading(false);
+    }
   };
 
+  useEffect(() => { loadOrders(); }, [page, search, statusFilter]);
+
   const columns = [
-    {
-      title: 'Voucher',
-      dataIndex: 'voucherNumber',
-      key: 'voucherNumber',
-      render: (text: string, record: any) => (
-        <Link to={`/orders/${record.id}`} style={{ fontFamily: 'monospace', color: '#0057B8', fontWeight: 500 }}>
-          {text}
-        </Link>
-      ),
-    },
-    {
-      title: 'Date',
-      dataIndex: 'orderDate',
-      key: 'orderDate',
-      render: (date: string) => formatDate(date),
-    },
-    {
-      title: 'Customer',
-      dataIndex: 'customerNameSnapshot',
-      key: 'customerNameSnapshot',
-    },
-    {
-      title: 'Phone',
-      dataIndex: 'phoneSnapshot',
-      key: 'phoneSnapshot',
-      responsive: ['md' as const],
-    },
-    {
-      title: 'Items',
-      key: 'items',
-      align: 'center' as const,
-      render: (_: any, record: any) => record.items.length,
-    },
-    {
-      title: 'Amount',
-      dataIndex: 'totalAmount',
-      key: 'totalAmount',
-      align: 'right' as const,
-      render: (amount: number) => <span style={{ fontWeight: 500 }}>{formatCurrency(amount)}</span>,
-    },
-    {
-      title: 'Payment',
-      dataIndex: 'paymentMethod',
-      key: 'paymentMethod',
-      responsive: ['md' as const],
-      render: (method: string) => <Tag>{method}</Tag>,
-    },
-    {
-      title: 'Status',
-      dataIndex: 'orderStatus',
-      key: 'orderStatus',
-      render: (status: string) => <Tag color={statusColors[status]}>{status}</Tag>,
-    },
-    {
-      title: 'Actions',
-      key: 'actions',
-      render: (_: any, record: any) => (
-        <Space size="small">
-          <Link to={`/orders/${record.id}`}>
-            <a><EyeOutlined /> View</a>
-          </Link>
-          <Link to={`/voucher/${record.id}`}>
-            <a>Voucher</a>
-          </Link>
-        </Space>
-      ),
-    },
+    { title: 'Voucher', dataIndex: 'voucherNumber', key: 'voucher', render: (v: string, r: Order) => <Text strong style={{ fontFamily: 'monospace', color: '#0057B8' }}>{v}</Text> },
+    { title: 'Date', dataIndex: 'orderDate', key: 'date', render: (d: string) => formatDate(d) },
+    { title: 'Customer', dataIndex: 'customerNameSnapshot', key: 'customer' },
+    { title: 'Phone', dataIndex: 'phoneSnapshot', key: 'phone' },
+    { title: 'Items', render: (_: any, r: Order) => r.items.length, key: 'items', align: 'center' as const },
+    { title: 'Total', dataIndex: 'totalAmount', key: 'total', align: 'right' as const, render: (v: number) => formatCurrency(v) },
+    { title: 'Payment', dataIndex: 'paymentMethod', key: 'payment' },
+    { title: 'Status', dataIndex: 'orderStatus', key: 'status', render: (s: string) => {
+      const colors: Record<string, string> = { Pending: 'gold', Confirmed: 'blue', Packed: 'purple', Shipped: 'cyan', Delivered: 'green', Cancelled: 'red' };
+      return <Tag color={colors[s]}>{s}</Tag>;
+    }},
   ];
 
   return (
     <div>
-      <div style={{ marginBottom: 24 }}>
-        <Title level={3} style={{ margin: 0 }}>Orders</Title>
-      </div>
+      <Title level={3}>Orders</Title>
 
-      {/* Filters */}
-      <Card style={{ marginBottom: 16 }}>
-        <Row gutter={[16, 16]}>
-          <Col xs={24} sm={12} md={10}>
-            <Search
-              placeholder="Search voucher, customer, phone..."
-              allowClear
-              onSearch={setSearch}
-              onChange={(e) => setSearch(e.target.value)}
-              prefix={<SearchOutlined />}
-            />
-          </Col>
-          <Col xs={12} sm={6} md={7}>
-            <Select
-              style={{ width: '100%' }}
-              placeholder="Filter by Status"
-              allowClear
-              value={filterStatus || undefined}
-              onChange={(value) => setFilterStatus(value || '')}
-            >
-              <Select.Option value="">All Status</Select.Option>
-              <Select.Option value="Pending">Pending</Select.Option>
-              <Select.Option value="Confirmed">Confirmed</Select.Option>
-              <Select.Option value="Packed">Packed</Select.Option>
-              <Select.Option value="Shipped">Shipped</Select.Option>
-              <Select.Option value="Delivered">Delivered</Select.Option>
-              <Select.Option value="Cancelled">Cancelled</Select.Option>
-            </Select>
-          </Col>
-          <Col xs={12} sm={6} md={7}>
-            <Select
-              style={{ width: '100%' }}
-              placeholder="Filter by Payment"
-              allowClear
-              value={filterPayment || undefined}
-              onChange={(value) => setFilterPayment(value || '')}
-            >
-              <Select.Option value="">All Payment</Select.Option>
-              <Select.Option value="COD">COD</Select.Option>
-              <Select.Option value="KBZ Pay">KBZ Pay</Select.Option>
-              <Select.Option value="Wave Pay">Wave Pay</Select.Option>
-              <Select.Option value="AYA Pay">AYA Pay</Select.Option>
-            </Select>
-          </Col>
-        </Row>
-      </Card>
+      <Space style={{ marginBottom: 16 }}>
+        <Search placeholder="Search orders..." onSearch={setSearch} style={{ width: 300 }} allowClear />
+        <Select placeholder="Status" style={{ width: 150 }} allowClear onChange={setStatusFilter}>
+          <Select.Option value="Pending">Pending</Select.Option>
+          <Select.Option value="Confirmed">Confirmed</Select.Option>
+          <Select.Option value="Packed">Packed</Select.Option>
+          <Select.Option value="Shipped">Shipped</Select.Option>
+          <Select.Option value="Delivered">Delivered</Select.Option>
+          <Select.Option value="Cancelled">Cancelled</Select.Option>
+        </Select>
+      </Space>
 
-      {/* Table */}
       <Card>
         <Table
           columns={columns}
-          dataSource={filtered}
+          dataSource={orders}
           rowKey="id"
-          pagination={{ pageSize: 20, showSizeChanger: true, showTotal: (total) => `Total ${total} orders` }}
+          loading={loading}
+          pagination={{ current: page, total, pageSize: 20, onChange: setPage }}
+          onRow={(record) => ({ onClick: () => navigate(`/orders/${record.id}`), style: { cursor: 'pointer' } })}
           locale={{ emptyText: 'No orders found' }}
           scroll={{ x: 1000 }}
         />

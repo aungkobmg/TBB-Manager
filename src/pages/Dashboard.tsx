@@ -1,276 +1,98 @@
-import { useMemo } from 'react';
+import { useState, useEffect } from 'react';
+import { Card, Row, Col, Statistic, Table, Tag, Typography, Spin, Empty, message } from 'antd';
+import { DollarOutlined, ShoppingCartOutlined, TagsOutlined, InboxOutlined, RiseOutlined, FallOutlined } from '@ant-design/icons';
 import { Link } from 'react-router-dom';
-import { Card, Row, Col, Statistic, Table, Tag, Typography, Space } from 'antd';
-import {
-  DollarOutlined,
-  ShoppingCartOutlined,
-  TagsOutlined,
-  InboxOutlined,
-  RiseOutlined,
-  FallOutlined,
-  ClockCircleOutlined,
-  CheckCircleOutlined,
-} from '@ant-design/icons';
-import { getOrders, getProducts, getExpenses, getCustomers, getBales, formatCurrency, formatDate } from '../utils/storage';
+import { dashboardApi, formatCurrency, formatDate } from '../api/services';
+import type { DashboardData } from '../api/services';
 
 const { Title, Text } = Typography;
 
 export default function Dashboard() {
-  const orders = getOrders();
-  const products = getProducts();
-  const expenses = getExpenses();
-  const customers = getCustomers();
-  const bales = getBales();
+  const [data, setData] = useState<DashboardData | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const today = new Date().toISOString().slice(0, 10);
-  const thisMonth = new Date().toISOString().slice(0, 7);
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const res = await dashboardApi.summary();
+        if (res.data) setData(res.data);
+      } catch (err) {
+        message.error('Failed to load dashboard');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, []);
 
-  const todayOrders = orders.filter(o => o.orderDate?.slice(0, 10) === today && o.orderStatus !== 'Cancelled');
-  const monthOrders = orders.filter(o => o.orderDate?.slice(0, 7) === thisMonth && o.orderStatus !== 'Cancelled');
-  const pendingOrders = orders.filter(o => o.orderStatus === 'Pending' || o.orderStatus === 'Confirmed');
-  const availableProducts = products.filter(p => p.status === 'Available');
-  const todayExpenses = expenses.filter(e => e.expenseDate?.slice(0, 10) === today);
+  if (loading) return <div style={{ textAlign: 'center', padding: 100 }}><Spin size="large" /></div>;
+  if (!data) return <Empty description="No data available" />;
 
-  const revenueToday = todayOrders.reduce((s, o) => s + o.totalAmount, 0);
-  const revenueMonth = monthOrders.reduce((s, o) => s + o.totalAmount, 0);
-  const inventoryCostValue = availableProducts.reduce((s, p) => s + p.costPrice, 0);
-  const totalExpenses = expenses.reduce((s, e) => s + e.amount, 0);
-  const totalRevenue = orders.filter(o => o.orderStatus !== 'Cancelled').reduce((s, o) => s + o.totalAmount, 0);
-  const totalProductCost = orders.filter(o => o.orderStatus !== 'Cancelled').reduce((s, o) =>
-    s + o.items.reduce((is, i) => {
-      const product = products.find(p => p.id === i.productId);
-      return is + (product?.costPrice || 0) * i.quantity;
-    }, 0), 0);
-  const grossProfit = totalRevenue - totalProductCost;
-  const netProfit = grossProfit - totalExpenses;
-
-  const recentOrders = [...orders].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 5);
-  const recentExpenses = [...expenses].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 5);
-
-  const orderColumns = [
-    {
-      title: 'Voucher',
-      dataIndex: 'voucherNumber',
-      key: 'voucherNumber',
-      render: (text: string, record: any) => (
-        <Link to={`/orders/${record.id}`} style={{ fontFamily: 'monospace', color: '#0057B8' }}>
-          {text}
-        </Link>
-      ),
-    },
-    {
-      title: 'Customer',
-      dataIndex: 'customerNameSnapshot',
-      key: 'customerNameSnapshot',
-    },
-    {
-      title: 'Amount',
-      dataIndex: 'totalAmount',
-      key: 'totalAmount',
-      align: 'right' as const,
-      render: (amount: number) => formatCurrency(amount),
-    },
-    {
-      title: 'Status',
-      dataIndex: 'orderStatus',
-      key: 'orderStatus',
-      render: (status: string) => {
-        const colors: Record<string, string> = {
-          Pending: 'gold',
-          Confirmed: 'blue',
-          Packed: 'purple',
-          Shipped: 'geekblue',
-          Delivered: 'green',
-          Cancelled: 'red',
-        };
-        return <Tag color={colors[status] || 'default'}>{status}</Tag>;
-      },
-    },
-  ];
-
-  const expenseColumns = [
-    {
-      title: 'Category',
-      dataIndex: 'category',
-      key: 'category',
-    },
-    {
-      title: 'Date',
-      dataIndex: 'expenseDate',
-      key: 'expenseDate',
-      render: (date: string) => formatDate(date),
-    },
-    {
-      title: 'Amount',
-      dataIndex: 'amount',
-      key: 'amount',
-      align: 'right' as const,
-      render: (amount: number) => <Text type="danger">{formatCurrency(amount)}</Text>,
-    },
+  const metrics = [
+    { title: 'Revenue Today', value: data.revenue_today, prefix: <DollarOutlined />, color: '#389e0d' },
+    { title: 'Revenue This Month', value: data.revenue_month, prefix: <DollarOutlined />, color: '#0057B8' },
+    { title: 'Orders Today', value: data.orders_today, prefix: <ShoppingCartOutlined />, color: '#722ed1' },
+    { title: 'Pending Orders', value: data.pending_orders, prefix: <ShoppingCartOutlined />, color: '#fa8c16' },
+    { title: 'Available Products', value: data.available_products, prefix: <TagsOutlined />, color: '#13c2c2' },
+    { title: 'Inventory Value', value: data.inventory_cost_value, prefix: <InboxOutlined />, color: '#2f54eb' },
+    { title: 'Total Expenses', value: data.total_expenses, prefix: <FallOutlined />, color: '#cf1322' },
+    { title: 'Gross Profit', value: data.gross_profit, prefix: <RiseOutlined />, color: '#389e0d' },
+    { title: 'Net Profit', value: data.net_profit, prefix: <RiseOutlined />, color: data.net_profit >= 0 ? '#389e0d' : '#cf1322' },
   ];
 
   return (
     <div>
-      <div style={{ marginBottom: 24 }}>
-        <Title level={3} style={{ marginBottom: 4 }}>Dashboard</Title>
-        <Text type="secondary">{formatDate(new Date().toISOString())}</Text>
+      <div style={{ marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Title level={3} style={{ margin: 0 }}>Dashboard</Title>
+        <Text type="secondary">{formatDate(data.today)}</Text>
       </div>
 
-      {/* Statistics Cards */}
       <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-        <Col xs={24} sm={12} lg={6}>
-          <Card>
-            <Statistic
-              title="Revenue Today"
-              value={revenueToday}
-              precision={0}
-              valueStyle={{ color: '#52c41a' }}
-              prefix={<DollarOutlined />}
-              suffix="MMK"
-              formatter={(value) => `${Number(value).toLocaleString()} MMK`}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <Card>
-            <Statistic
-              title="Revenue This Month"
-              value={revenueMonth}
-              precision={0}
-              valueStyle={{ color: '#1890ff' }}
-              prefix={<RiseOutlined />}
-              suffix="MMK"
-              formatter={(value) => `${Number(value).toLocaleString()} MMK`}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <Card>
-            <Statistic
-              title="Orders Today"
-              value={todayOrders.length}
-              valueStyle={{ color: '#722ed1' }}
-              prefix={<ShoppingCartOutlined />}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <Card>
-            <Statistic
-              title="Pending Orders"
-              value={pendingOrders.length}
-              valueStyle={{ color: '#fa8c16' }}
-              prefix={<ClockCircleOutlined />}
-            />
-          </Card>
-        </Col>
+        {metrics.map((m, i) => (
+          <Col xs={12} sm={8} lg={6} key={i}>
+            <Card>
+              <Statistic title={m.title} value={m.value} prefix={m.prefix} formatter={(v) => m.title.includes('Orders') || m.title.includes('Products') ? v : formatCurrency(Number(v))} valueStyle={{ color: m.color, fontSize: 18 }} />
+            </Card>
+          </Col>
+        ))}
       </Row>
 
-      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-        <Col xs={24} sm={12} lg={6}>
-          <Card>
-            <Statistic
-              title="Available Products"
-              value={availableProducts.length}
-              valueStyle={{ color: '#13c2c2' }}
-              prefix={<TagsOutlined />}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <Card>
-            <Statistic
-              title="Inventory Cost Value"
-              value={inventoryCostValue}
-              precision={0}
-              valueStyle={{ color: '#2f54eb' }}
-              prefix={<InboxOutlined />}
-              formatter={(value) => `${Number(value).toLocaleString()} MMK`}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <Card>
-            <Statistic
-              title="Gross Profit"
-              value={grossProfit}
-              precision={0}
-              valueStyle={{ color: '#52c41a' }}
-              prefix={<RiseOutlined />}
-              formatter={(value) => `${Number(value).toLocaleString()} MMK`}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <Card>
-            <Statistic
-              title="Net Profit"
-              value={netProfit}
-              precision={0}
-              valueStyle={{ color: netProfit >= 0 ? '#389e0d' : '#cf1322' }}
-              prefix={netProfit >= 0 ? <RiseOutlined /> : <FallOutlined />}
-              formatter={(value) => `${Number(value).toLocaleString()} MMK`}
-            />
-          </Card>
-        </Col>
-      </Row>
-
-      {/* Recent Orders & Expenses */}
       <Row gutter={[16, 16]}>
-        <Col xs={24} lg={14}>
-          <Card
-            title="Recent Orders"
-            extra={<Link to="/orders">View All</Link>}
-          >
-            <Table
-              columns={orderColumns}
-              dataSource={recentOrders}
-              rowKey="id"
-              pagination={false}
-              size="small"
+        <Col xs={24} lg={12}>
+          <Card title="Recent Orders" extra={<Link to="/orders">View All</Link>}>
+            <Table dataSource={data.recent_orders} rowKey="id" pagination={false} size="small"
               locale={{ emptyText: 'No orders yet' }}
+              columns={[
+                { title: 'Voucher', dataIndex: 'voucher_number', key: 'voucher', render: (v: string, r: any) => <Link to={`/orders/${r.id}`}><Text strong style={{ color: '#0057B8' }}>{v}</Text></Link> },
+                { title: 'Customer', dataIndex: 'customer_name_snapshot', key: 'customer' },
+                { title: 'Amount', dataIndex: 'total_amount', key: 'amount', align: 'right', render: (v: number) => formatCurrency(v) },
+                { title: 'Status', dataIndex: 'order_status', key: 'status', render: (s: string) => {
+                  const colors: Record<string, string> = { Pending: 'gold', Confirmed: 'blue', Packed: 'purple', Shipped: 'cyan', Delivered: 'green', Cancelled: 'red' };
+                  return <Tag color={colors[s]}>{s}</Tag>;
+                }},
+              ]}
             />
           </Card>
         </Col>
-        <Col xs={24} lg={10}>
-          <Card
-            title="Recent Expenses"
-            extra={<Link to="/finance">View All</Link>}
-          >
-            <Table
-              columns={expenseColumns}
-              dataSource={recentExpenses}
-              rowKey="id"
-              pagination={false}
-              size="small"
+        <Col xs={24} lg={12}>
+          <Card title="Recent Expenses" extra={<Link to="/finance">View All</Link>}>
+            <Table dataSource={data.recent_expenses} rowKey="id" pagination={false} size="small"
               locale={{ emptyText: 'No expenses yet' }}
+              columns={[
+                { title: 'Category', dataIndex: 'category', key: 'category' },
+                { title: 'Date', dataIndex: 'expense_date', key: 'date', render: (d: string) => formatDate(d) },
+                { title: 'Amount', dataIndex: 'amount', key: 'amount', align: 'right', render: (v: number) => <Text type="danger">{formatCurrency(v)}</Text> },
+              ]}
             />
           </Card>
         </Col>
       </Row>
 
-      {/* Quick Stats */}
-      <Row gutter={[16, 16]} style={{ marginTop: 24 }}>
-        <Col xs={12} sm={6}>
-          <Card style={{ textAlign: 'center' }}>
-            <Statistic title="Total Bales" value={bales.length} />
-          </Card>
-        </Col>
-        <Col xs={12} sm={6}>
-          <Card style={{ textAlign: 'center' }}>
-            <Statistic title="Total Products" value={products.length} />
-          </Card>
-        </Col>
-        <Col xs={12} sm={6}>
-          <Card style={{ textAlign: 'center' }}>
-            <Statistic title="Total Customers" value={customers.length} />
-          </Card>
-        </Col>
-        <Col xs={12} sm={6}>
-          <Card style={{ textAlign: 'center' }}>
-            <Statistic title="Total Orders" value={orders.length} />
-          </Card>
-        </Col>
+      <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
+        <Col xs={6}><Card style={{ textAlign: 'center' }}><Statistic title="Total Bales" value={data.total_bales} /></Card></Col>
+        <Col xs={6}><Card style={{ textAlign: 'center' }}><Statistic title="Total Products" value={data.total_products} /></Card></Col>
+        <Col xs={6}><Card style={{ textAlign: 'center' }}><Statistic title="Total Customers" value={data.total_customers} /></Card></Col>
+        <Col xs={6}><Card style={{ textAlign: 'center' }}><Statistic title="Total Orders" value={data.total_orders} /></Card></Col>
       </Row>
     </div>
   );

@@ -1,285 +1,174 @@
-import { useState } from 'react';
-import { Card, Tabs, Table, Typography, Row, Col, Statistic, DatePicker, Space, Tag, Divider } from 'antd';
-import {
-  CalendarOutlined,
-  BarChartOutlined,
-  InboxOutlined,
-  FundOutlined,
-  TeamOutlined,
-  RiseOutlined,
-  FileTextOutlined,
-} from '@ant-design/icons';
-import { getOrders, getProducts, getExpenses, getBales, getCustomers, formatCurrency, formatDate } from '../utils/storage';
+import { useState, useEffect } from 'react';
+import { Card, Tabs, Table, Typography, DatePicker, Space, Tag } from 'antd';
+import { CalendarOutlined, BarChartOutlined, InboxOutlined, FundOutlined, TeamOutlined, FileTextOutlined } from '@ant-design/icons';
+import { reportApi, formatCurrency, formatDate } from '../api/services';
 
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
 
 export default function Reports() {
   const [dateRange, setDateRange] = useState<[any, any] | null>(null);
-  const orders = getOrders();
-  const products = getProducts();
-  const expenses = getExpenses();
-  const bales = getBales();
-  const customers = getCustomers();
+  const [dailySales, setDailySales] = useState<any[]>([]);
+  const [monthlySales, setMonthlySales] = useState<any[]>([]);
+  const [balePerformance, setBalePerformance] = useState<any[]>([]);
+  const [profitLoss, setProfitLoss] = useState<any>(null);
+  const [customerHistory, setCustomerHistory] = useState<any[]>([]);
+  const [voucherHistory, setVoucherHistory] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  const getDateFilter = () => {
-    if (!dateRange) return null;
-    const from = dateRange[0]?.format('YYYY-MM-DD');
-    const to = dateRange[1]?.format('YYYY-MM-DD');
-    return { from, to };
+  const loadReports = async () => {
+    setLoading(true);
+    try {
+      const params = dateRange ? { date_from: dateRange[0].format('YYYY-MM-DD'), date_to: dateRange[1].format('YYYY-MM-DD') } : {};
+      const [daily, monthly, bales, pl, customers, vouchers] = await Promise.all([
+        reportApi.dailySales(params),
+        reportApi.monthlySales(params),
+        reportApi.balePerformance(),
+        reportApi.profitLoss(params),
+        reportApi.customerHistory(),
+        reportApi.voucherHistory(),
+      ]);
+      setDailySales(daily.data || []);
+      setMonthlySales(monthly.data || []);
+      setBalePerformance(bales.data || []);
+      setProfitLoss(pl.data || null);
+      setCustomerHistory(customers.data || []);
+      setVoucherHistory(vouchers.data || []);
+    } catch (err) {
+      console.error('Failed to load reports', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const filterByDate = (dateStr: string) => {
-    const range = getDateFilter();
-    if (!range) return true;
-    return dateStr >= range.from && dateStr <= range.to;
-  };
-
-  const filteredOrders = orders.filter(o => filterByDate(o.orderDate?.slice(0, 10) || '') && o.orderStatus !== 'Cancelled');
-  const filteredExpenses = expenses.filter(e => filterByDate(e.expenseDate?.slice(0, 10) || ''));
+  useEffect(() => { loadReports(); }, [dateRange]);
 
   const tabItems = [
     {
-      key: 'daily-sales',
+      key: 'daily',
       label: <span><CalendarOutlined /> Daily Sales</span>,
-      children: (() => {
-        const byDate: Record<string, { orders: number; revenue: number }> = {};
-        filteredOrders.forEach(o => {
-          const d = o.orderDate?.slice(0, 10) || '';
-          if (!byDate[d]) byDate[d] = { orders: 0, revenue: 0 };
-          byDate[d].orders++;
-          byDate[d].revenue += o.totalAmount;
-        });
-        const data = Object.entries(byDate).sort((a, b) => b[0].localeCompare(a[0])).map(([date, info]) => ({ key: date, date, ...info }));
-        return (
-          <Table
-            dataSource={data}
-            pagination={{ pageSize: 30 }}
-            columns={[
-              { title: 'Date', dataIndex: 'date', key: 'date', render: (d: string) => formatDate(d) },
-              { title: 'Orders', dataIndex: 'orders', key: 'orders', align: 'center' },
-              { title: 'Revenue', dataIndex: 'revenue', key: 'revenue', align: 'right', render: (v: number) => formatCurrency(v) },
-            ]}
-            locale={{ emptyText: 'No data' }}
-          />
-        );
-      })(),
+      children: (
+        <Table
+          dataSource={dailySales}
+          rowKey="date"
+          loading={loading}
+          columns={[
+            { title: 'Date', dataIndex: 'date', key: 'date', render: (d: string) => formatDate(d) },
+            { title: 'Orders', dataIndex: 'orders', key: 'orders', align: 'center' as const },
+            { title: 'Revenue', dataIndex: 'revenue', key: 'revenue', align: 'right' as const, render: (v: number) => formatCurrency(v) },
+          ]}
+          locale={{ emptyText: 'No data' }}
+        />
+      ),
     },
     {
-      key: 'monthly-sales',
+      key: 'monthly',
       label: <span><BarChartOutlined /> Monthly Sales</span>,
-      children: (() => {
-        const byMonth: Record<string, { orders: number; revenue: number }> = {};
-        filteredOrders.forEach(o => {
-          const m = o.orderDate?.slice(0, 7) || '';
-          if (!byMonth[m]) byMonth[m] = { orders: 0, revenue: 0 };
-          byMonth[m].orders++;
-          byMonth[m].revenue += o.totalAmount;
-        });
-        const data = Object.entries(byMonth).sort((a, b) => b[0].localeCompare(a[0])).map(([month, info]) => ({ key: month, month, ...info }));
-        return (
-          <Table
-            dataSource={data}
-            pagination={false}
-            columns={[
-              { title: 'Month', dataIndex: 'month', key: 'month' },
-              { title: 'Orders', dataIndex: 'orders', key: 'orders', align: 'center' },
-              { title: 'Revenue', dataIndex: 'revenue', key: 'revenue', align: 'right', render: (v: number) => formatCurrency(v) },
-            ]}
-            locale={{ emptyText: 'No data' }}
-          />
-        );
-      })(),
+      children: (
+        <Table
+          dataSource={monthlySales}
+          rowKey="month"
+          loading={loading}
+          columns={[
+            { title: 'Month', dataIndex: 'month', key: 'month' },
+            { title: 'Orders', dataIndex: 'orders', key: 'orders', align: 'center' as const },
+            { title: 'Revenue', dataIndex: 'revenue', key: 'revenue', align: 'right' as const, render: (v: number) => formatCurrency(v) },
+          ]}
+          locale={{ emptyText: 'No data' }}
+        />
+      ),
     },
     {
-      key: 'inventory',
-      label: <span><InboxOutlined /> Inventory</span>,
-      children: (() => {
-        const available = products.filter(p => p.status === 'Available');
-        const costValue = available.reduce((s, p) => s + p.costPrice, 0);
-        const sellValue = available.reduce((s, p) => s + p.sellingPrice, 0);
-        return (
-          <div>
-            <Row gutter={16} style={{ marginBottom: 16 }}>
-              <Col xs={8}>
-                <Card size="small"><Statistic title="Available" value={available.length} /></Card>
-              </Col>
-              <Col xs={8}>
-                <Card size="small"><Statistic title="Cost Value" value={costValue} precision={0} formatter={(v) => `${Number(v).toLocaleString()} MMK`} /></Card>
-              </Col>
-              <Col xs={8}>
-                <Card size="small"><Statistic title="Selling Value" value={sellValue} precision={0} formatter={(v) => `${Number(v).toLocaleString()} MMK`} /></Card>
-              </Col>
-            </Row>
-            <Table
-              dataSource={products}
-              rowKey="id"
-              pagination={{ pageSize: 20 }}
-              size="small"
-              columns={[
-                { title: 'Code', dataIndex: 'productCode', key: 'productCode', render: (v: string) => <span style={{ fontFamily: 'monospace' }}>{v}</span> },
-                { title: 'Name', dataIndex: 'productName', key: 'productName' },
-                { title: 'Cost', dataIndex: 'costPrice', key: 'costPrice', align: 'right', render: (v: number) => formatCurrency(v) },
-                { title: 'Sell', dataIndex: 'sellingPrice', key: 'sellingPrice', align: 'right', render: (v: number) => formatCurrency(v) },
-                { title: 'Status', dataIndex: 'status', key: 'status', render: (s: string) => <Tag color={s === 'Available' ? 'green' : s === 'Sold' ? 'blue' : 'default'}>{s}</Tag> },
-              ]}
-            />
-          </div>
-        );
-      })(),
+      key: 'bales',
+      label: <span><InboxOutlined /> Bale Performance</span>,
+      children: (
+        <Table
+          dataSource={balePerformance}
+          rowKey="id"
+          loading={loading}
+          columns={[
+            { title: 'Bale Code', dataIndex: 'bale_code', key: 'code', render: (v: string) => <Text strong style={{ fontFamily: 'monospace' }}>{v}</Text> },
+            { title: 'Supplier', dataIndex: 'supplier_name', key: 'supplier' },
+            { title: 'Cost', dataIndex: 'bale_cost', key: 'cost', align: 'right' as const, render: (v: number) => formatCurrency(v) },
+            { title: 'Products', dataIndex: 'product_count', key: 'products', align: 'center' as const },
+            { title: 'Sold', dataIndex: 'sold_count', key: 'sold', align: 'center' as const },
+            { title: 'Revenue', dataIndex: 'revenue', key: 'revenue', align: 'right' as const, render: (v: number) => formatCurrency(v) },
+            { title: 'Profit', dataIndex: 'profit', key: 'profit', align: 'right' as const, render: (v: number) => <Text type={v >= 0 ? 'success' : 'danger'}>{formatCurrency(v)}</Text> },
+          ]}
+          locale={{ emptyText: 'No bales' }}
+        />
+      ),
     },
     {
-      key: 'bale-performance',
-      label: <span><FundOutlined /> Bale Performance</span>,
-      children: (() => {
-        const data = bales.map(b => {
-          const bProducts = products.filter(p => p.baleId === b.id);
-          const soldProducts = bProducts.filter(p => p.status === 'Sold');
-          const revenue = orders.filter(o => o.orderStatus !== 'Cancelled').reduce((s, o) =>
-            s + o.items.filter(i => bProducts.find(p => p.id === i.productId)).reduce((is, i) => is + i.lineTotal, 0), 0);
-          const cost = soldProducts.reduce((s, p) => s + p.costPrice, 0);
-          return {
-            key: b.id,
-            baleCode: b.baleCode,
-            baleCost: b.baleCost,
-            products: bProducts.length,
-            sold: soldProducts.length,
-            revenue,
-            profit: revenue - cost,
-          };
-        });
-        return (
-          <Table
-            dataSource={data}
-            pagination={false}
-            columns={[
-              { title: 'Bale Code', dataIndex: 'baleCode', key: 'baleCode', render: (v: string) => <span style={{ fontFamily: 'monospace' }}>{v}</span> },
-              { title: 'Cost', dataIndex: 'baleCost', key: 'baleCost', align: 'right', render: (v: number) => formatCurrency(v) },
-              { title: 'Products', dataIndex: 'products', key: 'products', align: 'center' },
-              { title: 'Sold', dataIndex: 'sold', key: 'sold', align: 'center' },
-              { title: 'Revenue', dataIndex: 'revenue', key: 'revenue', align: 'right', render: (v: number) => formatCurrency(v) },
-              { title: 'Profit', dataIndex: 'profit', key: 'profit', align: 'right', render: (v: number) => <Text style={{ color: v >= 0 ? '#52c41a' : '#cf1322' }}>{formatCurrency(v)}</Text> },
-            ]}
-            locale={{ emptyText: 'No bales' }}
-          />
-        );
-      })(),
-    },
-    {
-      key: 'profit-loss',
-      label: <span><RiseOutlined /> Profit & Loss</span>,
-      children: (() => {
-        const revenue = filteredOrders.reduce((s, o) => s + o.totalAmount, 0);
-        const productCost = filteredOrders.reduce((s, o) =>
-          s + o.items.reduce((is, i) => {
-            const p = products.find(pr => pr.id === i.productId);
-            return is + (p?.costPrice || 0) * i.quantity;
-          }, 0), 0);
-        const grossProfit = revenue - productCost;
-        const expTotal = filteredExpenses.reduce((s, e) => s + e.amount, 0);
-        const netProfit = grossProfit - expTotal;
-        return (
-          <div style={{ maxWidth: 500 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderBottom: '1px solid #f0f0f0' }}>
+      key: 'pl',
+      label: <span><FundOutlined /> Profit & Loss</span>,
+      children: profitLoss ? (
+        <Card>
+          <Space direction="vertical" size={16} style={{ width: '100%' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <Text>Revenue</Text>
-              <Text strong style={{ color: '#52c41a' }}>{formatCurrency(revenue)}</Text>
+              <Text strong style={{ color: '#3f8600' }}>{formatCurrency(profitLoss.revenue)}</Text>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderBottom: '1px solid #f0f0f0' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <Text>Product Cost</Text>
-              <Text strong style={{ color: '#fa8c16' }}>-{formatCurrency(productCost)}</Text>
+              <Text strong style={{ color: '#cf1322' }}>-{formatCurrency(profitLoss.product_cost)}</Text>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderBottom: '1px solid #f0f0f0' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #ccc', paddingTop: 8 }}>
               <Text strong>Gross Profit</Text>
-              <Text strong style={{ color: '#1890ff' }}>{formatCurrency(grossProfit)}</Text>
+              <Text strong style={{ color: '#3f8600' }}>{formatCurrency(profitLoss.gross_profit)}</Text>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderBottom: '1px solid #f0f0f0' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <Text>Operating Expenses</Text>
-              <Text strong style={{ color: '#cf1322' }}>-{formatCurrency(expTotal)}</Text>
+              <Text strong style={{ color: '#cf1322' }}>-{formatCurrency(profitLoss.expenses)}</Text>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '16px 0', borderTop: '2px solid #000' }}>
-              <Text strong style={{ fontSize: 18 }}>Net Profit</Text>
-              <Text strong style={{ fontSize: 18, color: netProfit >= 0 ? '#389e0d' : '#cf1322' }}>{formatCurrency(netProfit)}</Text>
+            <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '2px solid #000', paddingTop: 8, fontSize: 18 }}>
+              <Text strong>Net Profit</Text>
+              <Text strong style={{ color: profitLoss.net_profit >= 0 ? '#3f8600' : '#cf1322' }}>{formatCurrency(profitLoss.net_profit)}</Text>
             </div>
-          </div>
-        );
-      })(),
+          </Space>
+        </Card>
+      ) : <Card loading />,
     },
     {
-      key: 'customer-history',
+      key: 'customers',
       label: <span><TeamOutlined /> Customer History</span>,
-      children: (() => {
-        const data = customers.map(c => {
-          const cOrders = orders.filter(o => o.customerId === c.id && o.orderStatus !== 'Cancelled');
-          return {
-            key: c.id,
-            name: c.name,
-            phone: c.phone,
-            orders: cOrders.length,
-            total: cOrders.reduce((s, o) => s + o.totalAmount, 0),
-          };
-        }).filter(d => d.orders > 0);
-        return (
-          <Table
-            dataSource={data}
-            pagination={{ pageSize: 20 }}
-            columns={[
-              { title: 'Customer', dataIndex: 'name', key: 'name' },
-              { title: 'Phone', dataIndex: 'phone', key: 'phone' },
-              { title: 'Orders', dataIndex: 'orders', key: 'orders', align: 'center' },
-              { title: 'Total Spent', dataIndex: 'total', key: 'total', align: 'right', render: (v: number) => formatCurrency(v) },
-            ]}
-            locale={{ emptyText: 'No customer orders' }}
-          />
-        );
-      })(),
+      children: (
+        <Table
+          dataSource={customerHistory}
+          rowKey="id"
+          loading={loading}
+          columns={[
+            { title: 'Customer', dataIndex: 'name', key: 'name' },
+            { title: 'Phone', dataIndex: 'phone', key: 'phone' },
+            { title: 'Orders', dataIndex: 'order_count', key: 'orders', align: 'center' as const },
+            { title: 'Total Spent', dataIndex: 'total_spent', key: 'total', align: 'right' as const, render: (v: number) => formatCurrency(v) },
+          ]}
+          locale={{ emptyText: 'No customers' }}
+        />
+      ),
     },
     {
-      key: 'voucher-history',
+      key: 'vouchers',
       label: <span><FileTextOutlined /> Voucher History</span>,
-      children: (() => {
-        const allOrders = orders.filter(o => o.voucherNumber);
-        const data = allOrders
-          .filter(o => filterByDate(o.orderDate?.slice(0, 10) || ''))
-          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-          .map(o => ({
-            key: o.id,
-            voucherNumber: o.voucherNumber,
-            date: o.orderDate,
-            customer: o.customerNameSnapshot,
-            phone: o.phoneSnapshot,
-            items: o.items.length,
-            total: o.totalAmount,
-            status: o.orderStatus,
-            payment: o.paymentMethod,
-          }));
-        return (
-          <Table
-            dataSource={data}
-            pagination={{ pageSize: 20, showSizeChanger: true }}
-            columns={[
-              { title: 'Voucher No.', dataIndex: 'voucherNumber', key: 'voucherNumber', render: (v: string) => <Text strong style={{ fontFamily: 'monospace', color: '#0057B8' }}>{v}</Text> },
-              { title: 'Date', dataIndex: 'date', key: 'date', render: (d: string) => formatDate(d) },
-              { title: 'Customer', dataIndex: 'customer', key: 'customer' },
-              { title: 'Items', dataIndex: 'items', key: 'items', align: 'center' },
-              { title: 'Total', dataIndex: 'total', key: 'total', align: 'right', render: (v: number) => formatCurrency(v) },
-              { title: 'Payment', dataIndex: 'payment', key: 'payment' },
-              {
-                title: 'Status',
-                dataIndex: 'status',
-                key: 'status',
-                render: (s: string) => {
-                  const colors: Record<string, string> = {
-                    Pending: 'gold', Confirmed: 'blue', Packed: 'purple',
-                    Shipped: 'cyan', Delivered: 'green', Cancelled: 'red',
-                  };
-                  return <Tag color={colors[s]}>{s}</Tag>;
-                },
-              },
-            ]}
-            locale={{ emptyText: 'No vouchers' }}
-          />
-        );
-      })(),
+      children: (
+        <Table
+          dataSource={voucherHistory}
+          rowKey="id"
+          loading={loading}
+          columns={[
+            { title: 'Voucher', dataIndex: 'voucher_number', key: 'voucher', render: (v: string) => <Text strong style={{ fontFamily: 'monospace', color: '#0057B8' }}>{v}</Text> },
+            { title: 'Date', dataIndex: 'order_date', key: 'date', render: (d: string) => formatDate(d) },
+            { title: 'Customer', dataIndex: 'customer_name_snapshot', key: 'customer' },
+            { title: 'Items', dataIndex: 'item_count', key: 'items', align: 'center' as const },
+            { title: 'Total', dataIndex: 'total_amount', key: 'total', align: 'right' as const, render: (v: number) => formatCurrency(v) },
+            { title: 'Status', dataIndex: 'order_status', key: 'status', render: (s: string) => {
+              const colors: Record<string, string> = { Pending: 'gold', Confirmed: 'blue', Packed: 'purple', Shipped: 'cyan', Delivered: 'green', Cancelled: 'red' };
+              return <Tag color={colors[s]}>{s}</Tag>;
+            }},
+          ]}
+          locale={{ emptyText: 'No vouchers' }}
+        />
+      ),
     },
   ];
 
