@@ -22,7 +22,7 @@ class BalesController
         $search = trim($_GET['search'] ?? '');
         $status = trim($_GET['status'] ?? '');
 
-        $where = [];
+        $where = ['archived_at IS NULL'];
         $bindings = [];
 
         if ($search !== '') {
@@ -36,7 +36,7 @@ class BalesController
             $bindings[] = $status;
         }
 
-        $whereClause = $where ? 'WHERE ' . implode(' AND ', $where) : '';
+        $whereClause = 'WHERE ' . implode(' AND ', $where);
 
         // Count
         $countStmt = $db->prepare("SELECT COUNT(*) FROM bales {$whereClause}");

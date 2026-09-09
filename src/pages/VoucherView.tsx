@@ -24,7 +24,7 @@ export default function VoucherView() {
       ])
         .then(([orderRes, settingsRes]) => {
           setOrder(orderRes);
-          setSettings(settingsRes.data);
+          setSettings(settingsRes.data as unknown as Settings | null);
         })
         .catch(() => message.error('Failed to load voucher'))
         .finally(() => setLoading(false));
@@ -49,7 +49,7 @@ export default function VoucherView() {
 
       <Card className="voucher-print" style={{ maxWidth: 300, margin: '0 auto', fontFamily: 'monospace', fontSize: 12 }}>
         <div style={{ textAlign: 'center', marginBottom: 16 }}>
-          <Title level={4} style={{ margin: 0 }}>The Bra Boutique</Title>
+          <Title level={4} style={{ margin: 0 }}>{settings?.businessName || 'The Bra Boutique'}</Title>
           <Text type="secondary">(Yangon)</Text>
         </div>
 
@@ -106,9 +106,9 @@ export default function VoucherView() {
         <div style={{ marginTop: 12, textAlign: 'center' }}>
           <div><Text strong>Payment:</Text> {order.paymentMethod}</div>
           <div style={{ marginTop: 16, fontSize: 11 }}>
-            <div>Facebook: The Bra Boutique (Yangon)</div>
-            <div>Phone: 09-xxxxxxxxx</div>
-            <div style={{ marginTop: 8, fontWeight: 'bold' }}>Thank You For Shopping!</div>
+            <div>Facebook: {settings?.facebook || 'The Bra Boutique (Yangon)'}</div>
+            <div>Phone: {settings?.phone || '09-xxxxxxxxx'}</div>
+            <div style={{ marginTop: 8, fontWeight: 'bold' }}>{settings?.voucherFooter || 'Thank You For Shopping!'}</div>
           </div>
         </div>
       </Card>

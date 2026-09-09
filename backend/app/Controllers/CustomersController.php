@@ -21,11 +21,11 @@ class CustomersController
         $offset = ($page - 1) * $limit;
         $search = trim($_GET['search'] ?? '');
 
-        $where = '';
+        $where = 'WHERE c.archived_at IS NULL';
         $bindings = [];
 
         if ($search !== '') {
-            $where = 'WHERE c.name LIKE ? OR c.phone LIKE ? OR c.facebook_name LIKE ?';
+            $where .= ' AND (c.name LIKE ? OR c.phone LIKE ? OR c.facebook_name LIKE ?)';
             $bindings = ["%{$search}%", "%{$search}%", "%{$search}%"];
         }
 
