@@ -5,6 +5,32 @@
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
+// CSRF token cache
+let csrfToken: string | null = null;
+
+/**
+ * Fetch CSRF token from server
+ */
+async function fetchCsrfToken(): Promise<string | null> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/auth/csrf-token`, {
+      method: 'GET',
+      credentials: 'include',
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      if (data.success && data.data?.token) {
+        csrfToken = data.data.token;
+        return csrfToken;
+      }
+    }
+  } catch (error) {
+    console.error('Failed to fetch CSRF token:', error);
+  }
+  return null;
+}
+
 interface ApiResponse<T = any> {
   success: boolean;
   message?: string;
@@ -37,11 +63,27 @@ async function request<T = any>(
 ): Promise<ApiResponse<T>> {
   const url = `${API_BASE_URL}${endpoint}`;
 
+  // Check if this is a state-changing request that needs CSRF token
+  const method = (options.method || 'GET').toUpperCase();
+  const needsCsrf = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
+  
+  // Fetch CSRF token if needed and not already cached
+  if (needsCsrf && !csrfToken) {
+    await fetchCsrfToken();
+  }
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
+  };
+  
+  // Add CSRF token to headers if available
+  if (needsCsrf && csrfToken) {
+    headers['X-CSRF-TOKEN'] = csrfToken;
+  }
+
   const config: RequestInit = {
-    headers: {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-    },
+    headers,
     credentials: 'include', // Send cookies for session auth
     ...options,
   };

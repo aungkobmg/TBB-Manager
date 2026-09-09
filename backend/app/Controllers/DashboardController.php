@@ -74,12 +74,11 @@ class DashboardController
         ");
         $totalSalesRevenue = (float) $stmt->fetchColumn();
 
-        // Cost of sold products
+        // Cost of sold products (use historical cost_price_snapshot)
         $stmt = $db->query("
-            SELECT COALESCE(SUM(p.cost_price * oi.quantity), 0)
+            SELECT COALESCE(SUM(oi.cost_price_snapshot * oi.quantity), 0)
             FROM order_items oi
             JOIN orders o ON oi.order_id = o.id
-            JOIN products p ON oi.product_id = p.id
             WHERE o.order_status != 'Cancelled'
         ");
         $totalProductCost = (float) $stmt->fetchColumn();

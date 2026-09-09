@@ -79,7 +79,7 @@ export default function Login() {
         </Form>
 
         <div style={{ textAlign: 'center', marginTop: 16 }}>
-          <Text type="secondary" style={{ fontSize: 12 }}>Default: admin / admin123</Text>
+          <Text type="secondary" style={{ fontSize: 12 }}>Please contact your administrator for credentials.</Text>
         </div>
       </Card>
     </div>

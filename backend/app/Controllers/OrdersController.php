@@ -59,7 +59,11 @@ class OrdersController
         $countStmt->execute($bindings);
         $total = (int) $countStmt->fetchColumn();
 
-        $sql = "SELECT o.*, c.name as customer_name, c.phone as customer_phone
+        // Use JOIN with subquery to avoid N+1 query problem
+        $sql = "SELECT o.*, 
+                       c.name as customer_name, 
+                       c.phone as customer_phone,
+                       (SELECT COUNT(*) FROM order_items WHERE order_id = o.id) as item_count
                 FROM orders o
                 LEFT JOIN customers c ON o.customer_id = c.id
                 {$whereClause}
@@ -75,11 +79,7 @@ class OrdersController
             $o['delivery_fee'] = (float) $o['delivery_fee'];
             $o['subtotal'] = (float) $o['subtotal'];
             $o['total_amount'] = (float) $o['total_amount'];
-
-            // Get item count
-            $itemStmt = $db->prepare('SELECT COUNT(*) FROM order_items WHERE order_id = ?');
-            $itemStmt->execute([$o['id']]);
-            $o['item_count'] = (int) $itemStmt->fetchColumn();
+            $o['item_count'] = (int) $o['item_count'];
         }
 
         Response::paginated($orders, $total, $page, $limit);
@@ -276,10 +276,11 @@ class OrdersController
             // 5. Create order items and update product statuses
             foreach ($products as $product) {
                 $unitPrice = (float) $product['selling_price'];
+                $costPrice = (float) $product['cost_price'];
 
                 $stmt = $db->prepare('
-                    INSERT INTO order_items (order_id, product_id, product_code_snapshot, quantity, unit_price, line_total)
-                    VALUES (?, ?, ?, ?, ?, ?)
+                    INSERT INTO order_items (order_id, product_id, product_code_snapshot, quantity, unit_price, cost_price_snapshot, line_total)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
                 ');
                 $stmt->execute([
                     $orderId,
@@ -287,6 +288,7 @@ class OrdersController
                     $product['product_code'],
                     1,
                     $unitPrice,
+                    $costPrice,
                     $unitPrice,
                 ]);
 
@@ -458,6 +460,21 @@ class OrdersController
             return;
         }
 
+        // Validate status transition
+        $currentStatus = $order['order_status'];
+        $validTransitions = [
+            'Pending' => ['Confirmed'],
+            'Confirmed' => ['Packed'],
+            'Packed' => ['Shipped'],
+            'Shipped' => ['Delivered'],
+            'Delivered' => [], // Final state, no further transitions
+        ];
+
+        if (!isset($validTransitions[$currentStatus]) || !in_array($newStatus, $validTransitions[$currentStatus])) {
+            Response::error("Invalid status transition from {$currentStatus} to {$newStatus}", 400);
+            return;
+        }
+
         $db->prepare('UPDATE orders SET order_status = ? WHERE id = ?')
            ->execute([$newStatus, $id]);
 
@@ -491,6 +508,13 @@ class OrdersController
             if ($order['order_status'] === 'Cancelled') {
                 $db->rollBack();
                 Response::error('Order is already cancelled', 400);
+                return;
+            }
+
+            // Cannot cancel orders that are already shipped or delivered
+            if (in_array($order['order_status'], ['Shipped', 'Delivered'])) {
+                $db->rollBack();
+                Response::error("Cannot cancel an order that is already {$order['order_status']}", 400);
                 return;
             }
 

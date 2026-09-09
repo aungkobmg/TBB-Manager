@@ -166,10 +166,23 @@ class ProductsController
 
         $db = Database::getConnection();
 
-        // Generate product code
-        $stmt = $db->query("SELECT MAX(CAST(SUBSTRING(product_code, 5) AS UNSIGNED)) FROM products");
-        $maxNum = (int) $stmt->fetchColumn();
-        $productCode = sprintf('TBB-%06d', $maxNum + 1);
+        // Check if bale is closed (cannot add products to closed bales)
+        if (!empty($input['baleId'])) {
+            $stmt = $db->prepare('SELECT status FROM bales WHERE id = ?');
+            $stmt->execute([(int) $input['baleId']]);
+            $bale = $stmt->fetch();
+            
+            if ($bale && $bale['status'] === 'Closed') {
+                Response::error('Cannot add products to a closed bale', 400);
+                return;
+            }
+        }
+
+        // Generate product code atomically using sequence table
+        $stmt = $db->query("UPDATE sequences SET current_value = LAST_INSERT_ID(current_value + 1) WHERE name = 'product_code'");
+        $stmt = $db->query("SELECT LAST_INSERT_ID()");
+        $nextNum = (int) $stmt->fetchColumn();
+        $productCode = sprintf('TBB-%06d', $nextNum);
 
         $stmt = $db->prepare('
             INSERT INTO products (product_code, product_name, brand, category, size, color, condition_grade, cost_price, selling_price, bale_id, status)

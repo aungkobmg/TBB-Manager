@@ -132,6 +132,65 @@ class ReportsController
     }
 
     /**
+     * GET /reports/inventory-valuation
+     */
+    public function inventoryValuation(array $params, array $input, ?array $user): void
+    {
+        $db = Database::getConnection();
+
+        // Get inventory valuation for available products only
+        $stmt = $db->query("
+            SELECT
+                COUNT(*) as available_quantity,
+                COALESCE(SUM(cost_price), 0) as total_cost_value,
+                COALESCE(SUM(selling_price), 0) as total_selling_value,
+                COALESCE(SUM(selling_price - cost_price), 0) as potential_gross_profit
+            FROM products
+            WHERE status = 'Available' AND archived_at IS NULL
+        ");
+        $valuation = $stmt->fetch();
+
+        // Get breakdown by condition
+        $stmt = $db->query("
+            SELECT
+                condition_grade,
+                COUNT(*) as quantity,
+                COALESCE(SUM(cost_price), 0) as cost_value,
+                COALESCE(SUM(selling_price), 0) as selling_value
+            FROM products
+            WHERE status = 'Available' AND archived_at IS NULL
+            GROUP BY condition_grade
+            ORDER BY condition_grade
+        ");
+        $byCondition = $stmt->fetchAll();
+
+        // Get breakdown by category
+        $stmt = $db->query("
+            SELECT
+                COALESCE(category, 'Uncategorized') as category,
+                COUNT(*) as quantity,
+                COALESCE(SUM(cost_price), 0) as cost_value,
+                COALESCE(SUM(selling_price), 0) as selling_value
+            FROM products
+            WHERE status = 'Available' AND archived_at IS NULL
+            GROUP BY category
+            ORDER BY quantity DESC
+        ");
+        $byCategory = $stmt->fetchAll();
+
+        Response::success([
+            'valuation' => [
+                'available_quantity' => (int) $valuation['available_quantity'],
+                'total_cost_value' => (float) $valuation['total_cost_value'],
+                'total_selling_value' => (float) $valuation['total_selling_value'],
+                'potential_gross_profit' => (float) $valuation['potential_gross_profit'],
+            ],
+            'by_condition' => $byCondition,
+            'by_category' => $byCategory,
+        ]);
+    }
+
+    /**
      * GET /reports/bale-performance
      */
     public function balePerformance(array $params, array $input, ?array $user): void
@@ -145,9 +204,10 @@ class ReportsController
                 SUM(CASE WHEN p.status = 'Sold' THEN 1 ELSE 0 END) as sold_count,
                 SUM(CASE WHEN p.status = 'Available' THEN 1 ELSE 0 END) as available_count,
                 COALESCE(SUM(p.cost_price), 0) as total_product_cost,
-                COALESCE(SUM(CASE WHEN p.status = 'Sold' THEN p.selling_price ELSE 0 END), 0) as revenue
+                COALESCE(SUM(oi.unit_price), 0) as revenue
             FROM bales b
             LEFT JOIN products p ON b.id = p.bale_id
+            LEFT JOIN order_items oi ON p.id = oi.product_id
             GROUP BY b.id
             ORDER BY b.created_at DESC
         ");
@@ -183,12 +243,11 @@ class ReportsController
         $stmt->execute([$from, $to]);
         $revenue = (float) $stmt->fetchColumn();
 
-        // Product cost
+        // Product cost (use historical cost_price_snapshot)
         $stmt = $db->prepare("
-            SELECT COALESCE(SUM(p.cost_price * oi.quantity), 0)
+            SELECT COALESCE(SUM(oi.cost_price_snapshot * oi.quantity), 0)
             FROM order_items oi
             JOIN orders o ON oi.order_id = o.id
-            JOIN products p ON oi.product_id = p.id
             WHERE o.order_date BETWEEN ? AND ? AND o.order_status != 'Cancelled'
         ");
         $stmt->execute([$from, $to]);
