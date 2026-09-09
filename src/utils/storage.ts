@@ -136,25 +136,24 @@ export function initializeApp(): void {
   // No-op - backend handles initialization
 }
 
-export function getSession(): { userId: number; username: string; loginTime: number } | null {
-  // Session is managed by PHP sessions via cookies
-  // We check via the /auth/me endpoint in App.tsx
-  const stored = localStorage.getItem('tbb_session_cache');
-  if (stored) {
-    try {
-      return JSON.parse(stored);
-    } catch { return null; }
-  }
+/**
+ * Session management is handled entirely server-side via PHP sessions.
+ * Frontend relies on authenticated API calls to determine session state.
+ * No localStorage is used for session data.
+ */
+export function getSession(): null {
+  // Session is managed by PHP sessions via secure cookies
+  // Frontend checks authentication via /auth/me endpoint
   return null;
 }
 
-export function setSession(userId: number, username: string): void {
-  const session = { userId, username, loginTime: Date.now() };
-  localStorage.setItem('tbb_session_cache', JSON.stringify(session));
+export function setSession(_userId: number, _username: string): void {
+  // No-op: Session is managed server-side
+  // Authentication state is determined by API responses
 }
 
 export function clearSession(): void {
-  localStorage.removeItem('tbb_session_cache');
+  // No-op: Server-side session is cleared via /logout API
 }
 
 // ============================================================

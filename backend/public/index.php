@@ -15,16 +15,66 @@ $isProduction = env('APP_ENV', 'production') === 'production';
 if ($isProduction) {
     error_reporting(0);
     ini_set('display_errors', '0');
+    ini_set('log_errors', '1');
+    ini_set('error_log', dirname(__DIR__) . '/storage/logs/error.log');
 } else {
     error_reporting(E_ALL);
     ini_set('display_errors', '1');
 }
 
+// Global exception handler for production
+set_exception_handler(function($exception) use ($isProduction) {
+    if ($isProduction) {
+        http_response_code(500);
+        echo json_encode(['error' => 'An internal error occurred. Please try again later.']);
+        error_log('Unhandled exception: ' . $exception->getMessage());
+    } else {
+        http_response_code(500);
+        echo json_encode([
+            'error' => $exception->getMessage(),
+            'file' => $exception->getFile(),
+            'line' => $exception->getLine(),
+        ]);
+    }
+    exit;
+});
+
+// Global error handler for production
+set_error_handler(function($severity, $message, $file, $line) use ($isProduction) {
+    if ($isProduction) {
+        error_log("PHP Error: $message in $file:$line");
+        return true; // Suppress default error handler
+    }
+    return false; // Use default error handler in development
+});
+
+// Set timezone
+$timezone = env('TIMEZONE', 'Asia/Yangon');
+date_default_timezone_set($timezone);
+
 // CORS & JSON headers
 header('Content-Type: application/json; charset=utf-8');
-header('Access-Control-Allow-Origin: ' . (env('APP_URL', '*')));
+
+// Configure CORS - only allow trusted origins in production
+$appUrl = env('APP_URL', '');
+$allowedOrigins = [$appUrl];
+
+// Add additional allowed origins from environment if specified
+$additionalOrigins = env('CORS_ALLOWED_ORIGINS', '');
+if ($additionalOrigins) {
+    $allowedOrigins = array_merge($allowedOrigins, explode(',', $additionalOrigins));
+}
+
+$origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+if (in_array($origin, $allowedOrigins)) {
+    header('Access-Control-Allow-Origin: ' . $origin);
+} elseif (!$isProduction && $origin) {
+    // In development, allow any origin for convenience
+    header('Access-Control-Allow-Origin: ' . $origin);
+}
+
 header('Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-CSRF-TOKEN');
 header('Access-Control-Allow-Credentials: true');
 
 // Handle preflight
@@ -55,6 +105,7 @@ spl_autoload_register(function (string $class) {
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../app/Helpers/Response.php';
 require_once __DIR__ . '/../app/Helpers/Auth.php';
+require_once __DIR__ . '/../app/Helpers/CSRF.php';
 
 // Parse request
 $method = $_SERVER['REQUEST_METHOD'];
@@ -78,6 +129,7 @@ $routes = [
     'POST /login'              => ['AuthController', 'login', false],
     'POST /logout'             => ['AuthController', 'logout', true],
     'GET /auth/me'             => ['AuthController', 'me', true],
+    'GET /auth/csrf-token'     => ['AuthController', 'getCsrfToken', true],
     'PUT /auth/password'       => ['AuthController', 'changePassword', true],
 
     // Dashboard
@@ -160,6 +212,11 @@ foreach ($routes as $pattern => $handler) {
             if (!$user) {
                 Response::json(['error' => 'Unauthenticated'], 401);
                 exit;
+            }
+            
+            // CSRF validation for state-changing requests
+            if (CSRF::requiresValidation($method)) {
+                CSRF::validateRequest();
             }
         } else {
             $user = null;

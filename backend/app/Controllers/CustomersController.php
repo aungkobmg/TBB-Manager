@@ -107,6 +107,8 @@ class CustomersController
     public function search(array $params, array $input, ?array $user): void
     {
         $q = trim($_GET['q'] ?? '');
+        $limit = min(50, max(1, (int)($_GET['limit'] ?? 20))); // Default 20, max 50
+        
         if ($q === '') {
             Response::success([]);
             return;
@@ -118,7 +120,7 @@ class CustomersController
             FROM customers
             WHERE name LIKE ? OR phone LIKE ? OR facebook_name LIKE ?
             ORDER BY name ASC
-            LIMIT 10
+            LIMIT {$limit}
         ");
         $like = "%{$q}%";
         $stmt->execute([$like, $like, $like]);

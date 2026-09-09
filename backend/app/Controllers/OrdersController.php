@@ -59,7 +59,11 @@ class OrdersController
         $countStmt->execute($bindings);
         $total = (int) $countStmt->fetchColumn();
 
-        $sql = "SELECT o.*, c.name as customer_name, c.phone as customer_phone
+        // Use JOIN with subquery to avoid N+1 query problem
+        $sql = "SELECT o.*, 
+                       c.name as customer_name, 
+                       c.phone as customer_phone,
+                       (SELECT COUNT(*) FROM order_items WHERE order_id = o.id) as item_count
                 FROM orders o
                 LEFT JOIN customers c ON o.customer_id = c.id
                 {$whereClause}
@@ -75,11 +79,7 @@ class OrdersController
             $o['delivery_fee'] = (float) $o['delivery_fee'];
             $o['subtotal'] = (float) $o['subtotal'];
             $o['total_amount'] = (float) $o['total_amount'];
-
-            // Get item count
-            $itemStmt = $db->prepare('SELECT COUNT(*) FROM order_items WHERE order_id = ?');
-            $itemStmt->execute([$o['id']]);
-            $o['item_count'] = (int) $itemStmt->fetchColumn();
+            $o['item_count'] = (int) $o['item_count'];
         }
 
         Response::paginated($orders, $total, $page, $limit);

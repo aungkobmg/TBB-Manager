@@ -18,19 +18,29 @@ class Auth
         }
 
         if (session_status() === PHP_SESSION_NONE) {
-            $isSecure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off');
+            $isProduction = env('APP_ENV', 'production') === 'production';
+            $isSecure = $isProduction || (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off');
 
             session_set_cookie_params([
                 'lifetime' => 28800, // 8 hours
                 'path'     => '/',
                 'domain'   => env('SESSION_DOMAIN', ''),
-                'secure'   => $isSecure,
+                'secure'   => $isSecure, // Always secure in production
                 'httponly'  => true,
-                'samesite'  => 'Lax',
+                'samesite'  => $isProduction ? 'Strict' : 'Lax', // Stricter in production
             ]);
 
             session_name('TBB_OS_SESSION');
             session_start();
+            
+            // Regenerate session ID periodically to prevent fixation
+            if (!isset($_SESSION['last_regeneration'])) {
+                session_regenerate_id(true);
+                $_SESSION['last_regeneration'] = time();
+            } elseif (time() - $_SESSION['last_regeneration'] > 300) { // Every 5 minutes
+                session_regenerate_id(true);
+                $_SESSION['last_regeneration'] = time();
+            }
         }
 
         self::$started = true;

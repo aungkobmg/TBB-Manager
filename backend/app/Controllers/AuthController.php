@@ -5,6 +5,7 @@
 
 require_once __DIR__ . '/../Helpers/Response.php';
 require_once __DIR__ . '/../Helpers/Auth.php';
+require_once __DIR__ . '/../Helpers/RateLimiter.php';
 require_once __DIR__ . '/../../config/database.php';
 
 class AuthController
@@ -16,9 +17,26 @@ class AuthController
     {
         $username = trim($input['username'] ?? '');
         $password = $input['password'] ?? '';
+        $ipAddress = Auth::ipAddress();
 
         if ($username === '' || $password === '') {
             Response::error('Username and password are required', 400);
+            return;
+        }
+
+        // Check rate limiting by IP
+        if (RateLimiter::isLimited($ipAddress)) {
+            $remaining = RateLimiter::getRemainingLockout($ipAddress);
+            $minutes = ceil($remaining / 60);
+            Response::error("Too many failed attempts. Please try again in {$minutes} minutes.", 429);
+            return;
+        }
+
+        // Check rate limiting by username
+        if (RateLimiter::isLimited("user:{$username}")) {
+            $remaining = RateLimiter::getRemainingLockout("user:{$username}");
+            $minutes = ceil($remaining / 60);
+            Response::error("Too many failed attempts for this account. Please try again in {$minutes} minutes.", 429);
             return;
         }
 
@@ -28,6 +46,13 @@ class AuthController
         $found = $stmt->fetch();
 
         if (!$found || !password_verify($password, $found['password_hash'])) {
+            // Record failed attempts
+            RateLimiter::recordAttempt($ipAddress);
+            RateLimiter::recordAttempt("user:{$username}");
+            
+            // Log failed login attempt
+            $this->logActivity(null, 'Login Failed', 'auth', null, "Failed login attempt for username: {$username}");
+            
             Response::error('Invalid credentials', 401);
             return;
         }
@@ -36,6 +61,10 @@ class AuthController
             Response::error('Account is disabled', 403);
             return;
         }
+
+        // Login successful - clear rate limits
+        RateLimiter::clearAttempts($ipAddress);
+        RateLimiter::clearAttempts("user:{$username}");
 
         // Login
         Auth::login((int) $found['id'], $found['username'], $found['role']);
@@ -85,6 +114,18 @@ class AuthController
         $userData = $stmt->fetch();
 
         Response::success($userData);
+    }
+
+    /**
+     * GET /auth/csrf-token
+     */
+    public function getCsrfToken(array $params, array $input, ?array $user): void
+    {
+        require_once __DIR__ . '/../Helpers/CSRF.php';
+        
+        $token = CSRF::getToken();
+        
+        Response::success(['token' => $token]);
     }
 
     /**
