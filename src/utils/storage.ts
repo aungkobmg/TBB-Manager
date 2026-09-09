@@ -655,3 +655,30 @@ export function formatDateTime(dateStr: string): string {
   return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) + ' ' +
     d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 }
+
+// ============================================================
+// Additional Functions (for compatibility)
+// ============================================================
+
+export async function fetchOrderById(id: number): Promise<Order | null> {
+  return fetchOrder(id);
+}
+
+export async function updateOrder(id: number, updates: Partial<Order>): Promise<void> {
+  await api.put(`/orders/${id}`, {
+    deliveryCompany: updates.deliveryCompany,
+    trackingNumber: updates.trackingNumber,
+    deliveryFee: updates.deliveryFee,
+    paymentStatus: updates.paymentStatus,
+  });
+}
+
+export async function fetchReports(type: string, params?: any): Promise<any> {
+  const res = await api.get(`/reports/${type}`, params);
+  return res.data;
+}
+
+export function exportDatabase(): void {
+  // Trigger download from backend
+  window.open(`${import.meta.env.VITE_API_URL || '/api'}/settings/backup`, '_blank');
+}

@@ -1,177 +1,207 @@
-# TBB OS - The Bra Boutique Operating System
+# TBB OS — The Bra Boutique Operating System
 
-A production-ready Business Operating System for **The Bra Boutique (Yangon)**, built with React, TypeScript, and Ant Design.
+A complete business operating system for **The Bra Boutique (Yangon)** — a used clothing/bra resale business.
 
 ## 🎯 Overview
 
-TBB OS is a complete business management system designed specifically for a used clothing/bra resale business. It manages the entire workflow from bale purchase to final sale, with focus on:
+TBB OS manages the complete business flow:
 
-- **Fast order creation** - Quick Order workflow for rapid processing
-- **Reliable inventory tracking** - Prevent double-selling, track product lifecycle
-- **Customer database** - Complete customer management with order history
-- **Voucher generation** - Auto-generated voucher numbers with thermal receipt printing
-- **Financial visibility** - Revenue, expenses, and profit tracking
-- **Bale management** - Track incoming stock and product sourcing
+```
+Bale Purchase → Product Processing → Inventory → Customer Order → Voucher → Delivery → Revenue/Expense → Profit
+```
 
-## 🚀 Features
+## 🏗️ Architecture
+
+### Frontend
+- **React 18** with TypeScript
+- **Ant Design 5** for UI components
+- **React Router 6** for navigation
+- **Vite** for build tooling
+- **Code Splitting** with lazy loading
+
+### Backend
+- **PHP 8.4+** REST API
+- **MySQL 8+** database
+- **Session-based authentication**
+- **Transaction-safe operations**
+
+### Deployment
+- **Hostinger Shared Hosting** compatible
+- No Node.js runtime required in production
+- Standard PHP/MySQL hosting
+
+## ✨ Features
 
 ### Core Modules
 
-1. **Authentication**
-   - Secure login/logout
-   - Session management (8-hour timeout)
-   - Password hashing
-   - Activity logging
+1. **Dashboard** — Real-time business metrics
+2. **Bale Management** — Track incoming stock purchases
+3. **Inventory** — Individual product tracking with unique codes
+4. **Customer Database** — Customer profiles with order history
+5. **Quick Order** — Fast order creation workflow
+6. **Order Management** — Complete order lifecycle
+7. **Voucher Generation** — Auto-generated voucher numbers
+8. **80mm Thermal Printing** — Optimized for XPrinter XP-80U
+9. **Finance** — Revenue, expenses, profit tracking
+10. **Reports** — Daily/Monthly sales, inventory, P&L
+11. **Settings** — Business configuration
+12. **Activity Logs** — Complete audit trail
 
-2. **Dashboard**
-   - Real-time metrics (revenue, orders, inventory value, profit)
-   - Recent orders and expenses
-   - Quick statistics
+### Key Business Rules
 
-3. **Bale Management**
-   - Create/edit bales with auto-generated codes (BAL-YYMMDD-###)
-   - Track supplier, cost, expected/actual quantities
-   - Status tracking (Purchased → Processing → Completed → Closed)
-   - View linked products
+- ✅ Products can only be sold once (double-selling prevention)
+- ✅ Customer info is snapshotted in orders (historical integrity)
+- ✅ Cancelled orders don't count as revenue
+- ✅ Voucher numbers are unique per date
+- ✅ Product codes are auto-generated and unique
+- ✅ Financial calculations are server-side authoritative
+- ✅ Transaction-safe order creation with rollback
 
-4. **Inventory Management**
-   - Product CRUD with auto-generated codes (TBB-000001)
-   - Condition grading (A+/A/B)
-   - Status tracking (Available → Reserved → Sold → Cancelled)
-   - Search and filter by code, name, brand, size, condition, status
-   - Link products to source bales
+## 📦 Tech Stack
 
-5. **Customer Database**
-   - Complete customer profiles
-   - Search by name, phone, Facebook
-   - View order history and total spending
-   - Customer details drawer
+### Frontend
+```
+React 18 + TypeScript
+Ant Design 5
+React Router 6
+Vite
+```
 
-6. **Quick Order** ⚡ (Priority #1)
-   - Fast workflow: Customer → Product Code → Order → Voucher
-   - Real-time product code validation
-   - Prevents double-selling
-   - Auto-calculate totals
-   - Multiple payment methods (COD, KBZ Pay, Wave Pay, AYA Pay)
-   - Delivery company selection
+### Backend
+```
+PHP 8.4+
+MySQL 8+
+REST API
+Session Authentication
+```
 
-7. **Order Management**
-   - Full order lifecycle (Pending → Confirmed → Packed → Shipped → Delivered)
-   - Status management with controlled cancellation
-   - Product release on cancellation
-   - Order details with customer snapshots
-
-8. **Voucher Generation** ⚡ (Priority #2)
-   - Auto-generated voucher numbers (TBB-YYMMDD-####)
-   - Unique per date
-   - Immutable historical data
-   - Print preview
-
-9. **80mm Thermal Printing** ⚡ (Priority #3)
-   - Optimized for XPrinter XP-80U
-   - Clean receipt layout
-   - Customer-facing info only
-   - Dedicated print CSS
-
-10. **Finance**
-    - Revenue tracking from valid sales
-    - Expense management (Bale Purchase, Delivery, Packaging, Misc)
-    - Gross profit calculation (Revenue - Product Cost)
-    - Net profit calculation (Gross Profit - Expenses)
-
-11. **Reports**
-    - Daily Sales
-    - Monthly Sales
-    - Inventory Report
-    - Bale Performance
-    - Profit & Loss
-    - Customer Purchase History
-    - Date range filtering
-
-12. **Settings**
-    - Business information configuration
-    - Password change
-    - Database backup export
-
-13. **Activity Logs**
-    - Complete audit trail
-    - Track all business actions
-    - Searchable and filterable
-
-## 🎨 Design System
-
-### Brand Colors
-- **Primary**: #0057B8
-- **Dark**: #0A1930
-- **Light**: #F5F9FF
-- **White**: #FFFFFF
-
-### UI Framework
-- **Ant Design** - Primary component library
-- Clean, modern, professional interface
-- Mobile responsive
-- Desktop optimized
-
-## 📦 Technology Stack
-
-- **React 18** - UI framework
-- **TypeScript** - Type safety
-- **Ant Design** - UI components
-- **React Router** - Navigation
-- **LocalStorage** - Data persistence (demo)
-- **Vite** - Build tool
-
-## 🗄️ Data Model
-
-### Core Entities
-
-**Bale**
-- baleCode, purchaseDate, supplierName, baleCost
-- expectedQty, actualQty, status, notes
-
-**Product**
-- productCode, productName, brand, category, size, color
-- condition (A+/A/B), costPrice, sellingPrice
-- baleId, status (Available/Reserved/Sold/Cancelled)
-
-**Customer**
-- name, phone, facebookName, address, township, city, notes
-
-**Order**
-- voucherNumber, orderDate, customerId
-- customerNameSnapshot, phoneSnapshot, shippingAddressSnapshot
-- deliveryCompany, trackingNumber, paymentMethod
-- deliveryFee, subtotal, totalAmount
-- orderStatus, paymentStatus
-
-**Expense**
-- expenseDate, category, amount, description, reference
-
-**Activity Log**
-- userId, action, entityType, entityId, description, ipAddress
-
-## 🔐 Business Rules
-
-1. **Product can only be sold once** - Prevented at application level
-2. **Customer info is snapshotted in orders** - Historical integrity preserved
-3. **Cancelled orders don't count as revenue** - Financial accuracy
-4. **Voucher numbers are unique per date** - No duplicates
-5. **Product codes are auto-generated and unique** - TBB-000001, TBB-000002, etc.
-6. **Bale codes are auto-generated** - BAL-YYMMDD-###
-7. **No mock/demo data** - System starts empty, ready for real data
-
-## 🚀 Getting Started
+## 🚀 Quick Start
 
 ### Prerequisites
 - Node.js 18+
-- npm or yarn
+- PHP 8.4+
+- MySQL 8+
 
 ### Installation
 
 ```bash
-# Install dependencies
+# 1. Clone repository
+git clone <repository-url>
+cd tbb-os
+
+# 2. Install frontend dependencies
 npm install
 
+# 3. Setup backend
+cd backend
+cp .env.example .env
+# Edit .env with your database credentials
+
+# 4. Create database
+mysql -u root -p -e "CREATE DATABASE tbb_os CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+mysql -u root -p tbb_os < ../database/schema.sql
+
+# 5. Start backend
+php -S localhost:8000 -t public
+
+# 6. Start frontend (new terminal)
+npm run dev
+```
+
+Visit http://localhost:3000
+
+**Login:**
+- Username: `admin`
+- Password: `admin123`
+
+## 📖 Documentation
+
+- [Deployment Guide](DEPLOYMENT.md) — Complete production deployment instructions
+- [API Documentation](backend/README.md) — REST API endpoints
+- [Database Schema](database/schema.sql) — MySQL table structure
+
+## 🗂️ Project Structure
+
+```
+tbb-os/
+├── src/                    # Frontend source
+│   ├── api/               # API client & services
+│   ├── pages/             # React pages (15 pages)
+│   ├── hooks/             # Custom React hooks
+│   ├── utils/             # Utility functions
+│   └── App.tsx            # Main app component
+├── backend/               # PHP backend
+│   ├── app/
+│   │   ├── Controllers/   # API controllers (10 controllers)
+│   │   ├── Helpers/       # Auth, Response helpers
+│   │   └── Services/      # Business logic
+│   ├── config/            # Database, environment config
+│   └── public/            # Web root (index.php, .htaccess)
+├── database/
+│   └── schema.sql         # MySQL schema (11 tables)
+├── dist/                  # Production build output
+└── DEPLOYMENT.md          # Deployment guide
+```
+
+## 🎨 Brand Colors
+
+- **Primary:** #0057B8
+- **Dark:** #0A1930
+- **Light:** #F5F9FF
+- **White:** #FFFFFF
+
+## 🔐 Security Features
+
+- Password hashing (bcrypt)
+- Session-based authentication
+- CSRF protection
+- SQL injection prevention (prepared statements)
+- XSS protection
+- Secure session handling
+- Activity logging
+- Role-based access control
+
+## 📊 Database Schema
+
+### Core Tables
+- `users` — System users
+- `settings` — Business configuration
+- `bales` — Stock purchases
+- `products` — Individual items
+- `customers` — Customer profiles
+- `orders` — Sales orders
+- `order_items` — Order line items
+- `expenses` — Business expenses
+- `transactions` — Financial records
+- `activity_logs` — Audit trail
+- `voucher_sequences` — Voucher number generation
+
+## 🖨️ Thermal Printing
+
+Optimized for **XPrinter XP-80U** (80mm thermal printer):
+- Dedicated print CSS
+- Clean receipt layout
+- Customer-facing information only
+- No internal data exposed
+
+## 📈 Performance
+
+### Frontend
+- Code splitting with lazy loading
+- Initial bundle: ~500KB (165KB gzipped)
+- 39 optimized chunks
+- Route-level code splitting
+
+### Backend
+- Database indexes on frequently queried fields
+- Server-side pagination
+- Prepared statements
+- Efficient SQL queries
+- Aggregation for reports
+
+## 🛠️ Development
+
+```bash
 # Start development server
 npm run dev
 
@@ -182,177 +212,32 @@ npm run build
 npm run preview
 ```
 
-### Login Credentials
+## 🚢 Production Deployment
 
-**Default Admin Account:**
-- Username: `admin`
-- Password: `admin123`
+See [DEPLOYMENT.md](DEPLOYMENT.md) for complete instructions.
 
-⚠️ **Important**: Change the default password after first login!
+### Quick Deployment Steps
 
-## 📱 Usage Guide
+1. Upload `backend/` to Hostinger
+2. Configure `.env` with database credentials
+3. Run `install.php` to setup database
+4. Build frontend: `npm run build`
+5. Upload `dist/` to web root
+6. Configure API URL
+7. Delete `install.php`
 
-### Quick Order Workflow (Fastest Path)
+## 📝 License
 
-1. Navigate to **Quick Order**
-2. Search or create customer
-3. Enter product code (e.g., TBB-000001) and press Enter
-4. Repeat for additional products
-5. Set delivery fee and payment method
-6. Click "Place Order & Generate Voucher"
-7. Print thermal receipt
+Proprietary — The Bra Boutique (Yangon)
 
-### Adding Products to Inventory
+## 👥 Credits
 
-1. Navigate to **Inventory**
-2. Click "Add Product"
-3. Fill in product details
-4. Optionally link to source bale
-5. Product code is auto-generated
-
-### Managing Bales
-
-1. Navigate to **Bales**
-2. Click "Add Bale"
-3. Enter supplier, cost, quantities
-4. Bale code is auto-generated
-5. Update status as processing progresses
-
-### Generating Reports
-
-1. Navigate to **Reports**
-2. Select report type (Daily Sales, Monthly, Inventory, etc.)
-3. Optionally set date range
-4. View data tables with calculations
-
-## 🖨️ Thermal Printing Setup
-
-### Printer: XPrinter XP-80U
-### Paper: 80mm thermal
-
-The voucher is optimized for 80mm thermal printing:
-- Clean receipt layout
-- Customer-facing info only
-- No internal data (costs, profit, status)
-- Proper line spacing and alignment
-
-**To Print:**
-1. Open order voucher
-2. Click "Print Receipt"
-3. Select XPrinter XP-80U
-4. Print
-
-## 📊 Financial Calculations
-
-**Revenue** = Sum of all non-cancelled order totals
-
-**Product Cost** = Sum of cost prices for sold products
-
-**Gross Profit** = Revenue - Product Cost
-
-**Total Expenses** = Sum of all expense records
-
-**Net Profit** = Gross Profit - Total Expenses
-
-## 🔒 Security Notes
-
-This is a demo version using localStorage. For production deployment:
-
-1. **Backend Required**: Implement PHP/MySQL backend
-2. **Password Hashing**: Use bcrypt on server-side
-3. **Session Management**: Use secure HTTP-only cookies
-4. **CSRF Protection**: Implement CSRF tokens
-5. **Input Validation**: Server-side validation required
-6. **SQL Injection**: Use prepared statements
-7. **XSS Protection**: Sanitize all user input
-8. **Rate Limiting**: Implement API rate limits
-9. **Backup**: Regular database backups
-10. **HTTPS**: Always use HTTPS in production
-
-## 📦 Production Deployment
-
-### For Hostinger (PHP/MySQL)
-
-This React app needs a PHP backend for production:
-
-1. **Backend API**: Create PHP REST API
-2. **Database**: MySQL 8+ with proper schema
-3. **Authentication**: Server-side session management
-4. **File Structure**:
-   ```
-   /public (React build)
-   /api (PHP backend)
-   /config (Database config)
-   ```
-
-### Database Schema
-
-See `database-schema.sql` for complete MySQL schema.
-
-### Environment Variables
-
-```env
-DB_HOST=localhost
-DB_NAME=tbb_os
-DB_USER=your_user
-DB_PASS=your_password
-APP_URL=https://yourdomain.com
-```
-
-## 📝 Development Notes
-
-### Data Persistence
-
-Currently uses localStorage for demo purposes. In production:
-- Replace localStorage calls with API calls
-- Implement proper database transactions
-- Add optimistic locking for concurrent access
-- Implement proper error handling
-
-### Performance
-
-- Ant Design bundle size: ~1.2MB (gzipped: ~394KB)
-- Consider code-splitting for production
-- Lazy load routes
-- Optimize images
-
-### Testing
-
-Recommended test coverage:
-- Authentication flow
-- Quick Order workflow
-- Product status transitions
-- Voucher generation
-- Financial calculations
-- Print functionality
-
-## 🎯 Key Features Checklist
-
-- ✅ Authentication with session management
-- ✅ Dashboard with real-time metrics
-- ✅ Bale management with auto-generated codes
-- ✅ Inventory with product lifecycle tracking
-- ✅ Customer database with order history
-- ✅ Quick Order workflow (Priority #1)
-- ✅ Voucher generation (Priority #2)
-- ✅ 80mm thermal printing (Priority #3)
-- ✅ Order management with status workflow
-- ✅ Finance tracking (revenue, expenses, profit)
-- ✅ Reports with date filtering
-- ✅ Settings management
-- ✅ Activity logs (audit trail)
-- ✅ Database backup export
-- ✅ Mobile responsive design
-- ✅ Ant Design UI components
-
-## 📄 License
-
-This is a custom-built application for The Bra Boutique (Yangon).
-
-## 🤝 Support
-
-For issues or questions, contact the development team.
+Built for **The Bra Boutique (Yangon)**
 
 ---
 
-**Built with ❤️ for The Bra Boutique (Yangon)**
+**Status:** ✅ Production Ready
+
+**Last Updated:** 2026
+
+**Version:** 1.0.0

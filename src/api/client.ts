@@ -32,7 +32,8 @@ class ApiError extends Error {
 
 async function request<T = any>(
   endpoint: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  retries = 3
 ): Promise<ApiResponse<T>> {
   const url = `${API_BASE_URL}${endpoint}`;
 
@@ -49,27 +50,47 @@ async function request<T = any>(
     config.body = JSON.stringify(options.body);
   }
 
-  try {
-    const response = await fetch(url, config);
-    const data = await response.json();
+  for (let i = 0; i < retries; i++) {
+    try {
+      const response = await fetch(url, config);
+      
+      // Handle non-JSON responses
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        throw new ApiError('Invalid response from server', response.status);
+      }
 
-    if (!response.ok) {
-      throw new ApiError(
-        data.error || data.message || 'Request failed',
-        response.status,
-        data.details
-      );
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new ApiError(
+          data.error || data.message || 'Request failed',
+          response.status,
+          data.details
+        );
+      }
+
+      return data;
+    } catch (error) {
+      // Don't retry on client errors (4xx)
+      if (error instanceof ApiError && error.status >= 400 && error.status < 500) {
+        throw error;
+      }
+
+      // Retry on network errors or server errors (5xx)
+      if (i === retries - 1) {
+        if (error instanceof ApiError) {
+          throw error;
+        }
+        throw new ApiError('Network error. Please check your connection.', 0);
+      }
+
+      // Wait before retrying (exponential backoff)
+      await new Promise(resolve => setTimeout(resolve, Math.pow(2, i) * 1000));
     }
-
-    return data;
-  } catch (error) {
-    if (error instanceof ApiError) {
-      throw error;
-    }
-
-    // Network error
-    throw new ApiError('Network error. Please check your connection.', 0);
   }
+
+  throw new ApiError('Request failed after multiple attempts', 0);
 }
 
 // Convenience methods
