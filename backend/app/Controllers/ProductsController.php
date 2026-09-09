@@ -24,7 +24,7 @@ class ProductsController
         $condition = trim($_GET['condition'] ?? '');
         $baleId = (int)($_GET['bale_id'] ?? 0);
 
-        $where = [];
+        $where = ['p.archived_at IS NULL'];
         $bindings = [];
 
         if ($search !== '') {
@@ -51,7 +51,7 @@ class ProductsController
             $bindings[] = $baleId;
         }
 
-        $whereClause = $where ? 'WHERE ' . implode(' AND ', $where) : '';
+        $whereClause = 'WHERE ' . implode(' AND ', $where);
 
         // Count
         $countStmt = $db->prepare("SELECT COUNT(*) FROM products p {$whereClause}");
