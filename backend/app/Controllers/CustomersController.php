@@ -146,48 +146,9 @@ class CustomersController
 
         $db = Database::getConnection();
 
-        // Check for potential duplicates
-        $duplicates = [];
-        
         $phone = trim($input['phone'] ?? '');
         $facebookName = trim($input['facebookName'] ?? '');
-        
-        if ($phone !== '') {
-            $stmt = $db->prepare('SELECT id, name, phone FROM customers WHERE phone = ? AND archived_at IS NULL');
-            $stmt->execute([$phone]);
-            $phoneMatch = $stmt->fetch();
-            if ($phoneMatch) {
-                $duplicates[] = [
-                    'id' => $phoneMatch['id'],
-                    'name' => $phoneMatch['name'],
-                    'match_field' => 'phone',
-                    'match_value' => $phone
-                ];
-            }
-        }
-
-        if ($facebookName !== '') {
-            $stmt = $db->prepare('SELECT id, name, facebook_name FROM customers WHERE facebook_name = ? AND archived_at IS NULL');
-            $stmt->execute([$facebookName]);
-            $fbMatch = $stmt->fetch();
-            if ($fbMatch) {
-                $duplicates[] = [
-                    'id' => $fbMatch['id'],
-                    'name' => $fbMatch['name'],
-                    'match_field' => 'facebook_name',
-                    'match_value' => $facebookName
-                ];
-            }
-        }
-
-        // If duplicates found and not explicitly confirmed, return warning
-        if (!empty($duplicates) && empty($input['confirmDuplicate'])) {
-            Response::error('Potential duplicate customer(s) found', 409, [
-                'duplicates' => $duplicates,
-                'message' => 'Please review and confirm if you want to create this customer anyway.'
-            ]);
-            return;
-        }
+        $duplicateWarnings = $this->findDuplicateWarnings($db, $phone, $facebookName);
 
         $stmt = $db->prepare('
             INSERT INTO customers (name, phone, facebook_name, address, township, city, notes)
@@ -212,7 +173,7 @@ class CustomersController
         $customer = $stmt->fetch();
         $customer['id'] = (int) $customer['id'];
 
-        Response::success($customer, 'Customer created');
+        Response::success($customer, 'Customer created', $this->buildWarningPayload($duplicateWarnings));
     }
 
     /**
@@ -223,9 +184,10 @@ class CustomersController
         $id = (int) $params['id'];
         $db = Database::getConnection();
 
-        $stmt = $db->prepare('SELECT id FROM customers WHERE id = ?');
+        $stmt = $db->prepare('SELECT id, phone, facebook_name FROM customers WHERE id = ?');
         $stmt->execute([$id]);
-        if (!$stmt->fetch()) {
+        $existingCustomer = $stmt->fetch();
+        if (!$existingCustomer) {
             Response::error('Customer not found', 404);
             return;
         }
@@ -255,6 +217,15 @@ class CustomersController
             return;
         }
 
+        $phone = array_key_exists('phone', $input)
+            ? trim((string) $input['phone'])
+            : trim((string) ($existingCustomer['phone'] ?? ''));
+        $facebookName = array_key_exists('facebookName', $input)
+            ? trim((string) $input['facebookName'])
+            : trim((string) ($existingCustomer['facebook_name'] ?? ''));
+
+        $duplicateWarnings = $this->findDuplicateWarnings($db, $phone, $facebookName, $id);
+
         $bindings[] = $id;
         $sql = 'UPDATE customers SET ' . implode(', ', $fields) . ' WHERE id = ?';
         $db->prepare($sql)->execute($bindings);
@@ -266,7 +237,59 @@ class CustomersController
         $customer = $stmt->fetch();
         $customer['id'] = (int) $customer['id'];
 
-        Response::success($customer, 'Customer updated');
+        Response::success($customer, 'Customer updated', $this->buildWarningPayload($duplicateWarnings));
+    }
+
+    private function findDuplicateWarnings(PDO $db, string $phone, string $facebookName, ?int $excludeId = null): array
+    {
+        $warnings = [];
+
+        if ($phone !== '') {
+            $this->appendDuplicateWarnings($warnings, $db, 'phone', 'phone', $phone, $excludeId);
+        }
+
+        if ($facebookName !== '') {
+            $this->appendDuplicateWarnings($warnings, $db, 'facebook_name', 'facebook_name', $facebookName, $excludeId);
+        }
+
+        return $warnings;
+    }
+
+    private function appendDuplicateWarnings(array &$warnings, PDO $db, string $column, string $matchField, string $matchValue, ?int $excludeId = null): void
+    {
+        $sql = "SELECT id, name FROM customers WHERE {$column} = ? AND archived_at IS NULL";
+        $bindings = [$matchValue];
+
+        if ($excludeId !== null) {
+            $sql .= ' AND id != ?';
+            $bindings[] = $excludeId;
+        }
+
+        $stmt = $db->prepare($sql . ' LIMIT 5');
+        $stmt->execute($bindings);
+
+        while ($match = $stmt->fetch()) {
+            $warnings[] = [
+                'id' => (int) $match['id'],
+                'name' => $match['name'],
+                'match_field' => $matchField,
+                'match_value' => $matchValue,
+            ];
+        }
+    }
+
+    private function buildWarningPayload(array $warnings): array
+    {
+        if (empty($warnings)) {
+            return [];
+        }
+
+        return [
+            'warning' => 'Customer saved, but matching phone or Facebook data already exists. Please review duplicates.',
+            'warnings' => [
+                'duplicates' => $warnings,
+            ],
+        ];
     }
 
     private function logActivity(int $userId, string $action, string $entityType, ?int $entityId, string $description): void

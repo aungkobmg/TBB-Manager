@@ -130,21 +130,45 @@ class BalesController
         }
 
         $db = Database::getConnection();
+        $db->beginTransaction();
 
-        // Generate bale code
-        $dateKey = date('ymd', strtotime($purchaseDate));
-        $stmt = $db->prepare("SELECT COUNT(*) FROM bales WHERE bale_code LIKE ?");
-        $stmt->execute(["BAL-{$dateKey}-%"]);
-        $count = (int) $stmt->fetchColumn();
-        $baleCode = sprintf('BAL-%s-%03d', $dateKey, $count + 1);
+        try {
+            $dateKey = date('ymd', strtotime($purchaseDate));
+            $sequenceName = "bale_code_{$dateKey}";
 
-        $stmt = $db->prepare('
-            INSERT INTO bales (bale_code, purchase_date, supplier_name, bale_cost, expected_qty, actual_qty, status, notes)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ');
-        $stmt->execute([$baleCode, $purchaseDate, $supplierName, $baleCost, $expectedQty, $actualQty, $status, $notes]);
+            $stmt = $db->prepare('
+                INSERT INTO sequences (name, current_value)
+                VALUES (?, 0)
+                ON DUPLICATE KEY UPDATE current_value = current_value
+            ');
+            $stmt->execute([$sequenceName]);
 
-        $id = (int) $db->lastInsertId();
+            $stmt = $db->prepare('
+                UPDATE sequences
+                SET current_value = LAST_INSERT_ID(current_value + 1)
+                WHERE name = ?
+            ');
+            $stmt->execute([$sequenceName]);
+
+            $stmt = $db->query('SELECT LAST_INSERT_ID()');
+            $nextNum = (int) $stmt->fetchColumn();
+            $baleCode = sprintf('BAL-%s-%03d', $dateKey, $nextNum);
+
+            $stmt = $db->prepare('
+                INSERT INTO bales (bale_code, purchase_date, supplier_name, bale_cost, expected_qty, actual_qty, status, notes)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ');
+            $stmt->execute([$baleCode, $purchaseDate, $supplierName, $baleCost, $expectedQty, $actualQty, $status, $notes]);
+
+            $id = (int) $db->lastInsertId();
+            $db->commit();
+        } catch (Exception $e) {
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
+            Response::error('Failed to create bale: ' . $e->getMessage(), 500);
+            return;
+        }
 
         // Log activity
         $this->logActivity($user['id'], 'Bale Created', 'bale', $id, "Created bale {$baleCode}");

@@ -45,9 +45,6 @@ DB_PASS=your_password
 DB_CHARSET=utf8mb4
 
 SESSION_DOMAIN=localhost
-
-ADMIN_USERNAME=admin
-ADMIN_PASSWORD=admin123
 ```
 
 ### 2. Database Setup
@@ -83,9 +80,7 @@ npm run dev
 
 Visit http://localhost:3000
 
-Login credentials:
-- Username: `admin`
-- Password: `admin123`
+Create the first admin account through the installer after importing the schema.
 
 ---
 
@@ -94,8 +89,9 @@ Login credentials:
 ### Step 1: Prepare Backend
 
 1. **Upload Backend Files**
-   - Upload entire `backend/` directory to your Hostinger account
-   - Recommended location: `public_html/api/` or a subdomain
+   - Upload the backend so that `backend/public/` is the web-served `/api` document root
+   - Keep `backend/app/`, `backend/config/`, `backend/storage/`, `backend/.env`, and `backend/install.php` outside the public document root when possible
+   - If using a subdomain, point that subdomain directly to `backend/public/`
 
 2. **Configure .env**
    ```bash
@@ -106,23 +102,22 @@ Login credentials:
    Edit `.env` with your Hostinger database credentials:
    ```env
    APP_ENV=production
-   APP_URL=https://yourdomain.com
+   APP_URL=https://your-frontend-domain.example
    APP_DEBUG=false
-   
+    
    DB_HOST=localhost
    DB_NAME=u123456789_tbbos
    DB_USER=u123456789_admin
    DB_PASS=your_secure_password
-   
-   ADMIN_USERNAME=admin
-   ADMIN_PASSWORD=your_secure_password
+   SESSION_DOMAIN=your-frontend-domain.example
+   CORS_ALLOWED_ORIGINS=https://your-frontend-domain.example
    ```
 
 3. **Set Permissions**
    ```bash
    chmod 755 backend/public
    chmod 644 backend/public/.htaccess
-   chmod 755 backend/storage
+   chmod 755 backend/storage backend/storage/logs backend/storage/rate_limits
    ```
 
 ### Step 2: Setup Database
@@ -136,9 +131,11 @@ Login credentials:
    - Use phpMyAdmin from Hostinger control panel
    - Import `database/schema.sql`
    
-   Or run the installer:
+   Then run the installer once:
    - Visit `https://yourdomain.com/api/install.php`
-   - Follow the installation wizard
+   - Create the first admin username/password
+   - Confirm `backend/storage/.installed` is created
+   - Remove installer access after setup
 
 ### Step 3: Build Frontend
 
@@ -155,6 +152,7 @@ npm run build
 1. **Upload dist/ directory** to your web root:
    - Location: `public_html/` (for main domain)
    - Or: `public_html/app/` (for subdirectory)
+   - Include the repository `public/.htaccess` file with the uploaded frontend files so React Router deep links resolve to `index.html`
 
 2. **Configure .htaccess** (if using subdirectory):
    ```apache
@@ -188,7 +186,7 @@ VITE_API_URL=/api
 ### Step 6: Security Checklist
 
 - ✅ Delete `install.php` after installation
-- ✅ Change default admin password
+- ✅ Store the installer-created admin password securely
 - ✅ Set `APP_DEBUG=false` in production
 - ✅ Enable HTTPS/SSL
 - ✅ Set proper file permissions
@@ -274,7 +272,7 @@ Create a cron job in Hostinger:
 
 ### Issue: Can't login
 **Solution**:
-- Run installer again to reset admin password
+- Verify the installer completed successfully and the `.installed` lock file exists in `backend/storage/`
 - Or manually update password in database:
   ```sql
   UPDATE users SET password_hash = '$2y$10$...' WHERE username = 'admin';
