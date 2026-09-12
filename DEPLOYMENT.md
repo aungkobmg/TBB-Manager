@@ -1,369 +1,463 @@
-# TBB OS — Deployment Guide
+# TBB OS — Hostinger Deployment Guide
 
-## 📋 Prerequisites
+This guide describes how to deploy TBB OS using the approved architecture:
 
-### For Local Development:
-- Node.js 18+
-- PHP 8.4+
-- MySQL 8+
-- Composer (optional, for PHP dependencies)
+```text
+React + TypeScript + Vite static frontend
+                    ↓
+PHP 8.4+ REST API
+                    ↓
+MySQL 8+
+```
 
-### For Production (Hostinger):
-- Hostinger Shared Hosting account with PHP 8.4+ and MySQL support
-- FTP/SFTP access or File Manager
-- Domain name with SSL certificate
+The production server does **not** need Node.js. Node.js is required only to build the frontend.
 
 ---
 
-## 🚀 Local Development Setup
+## 1. Requirements
 
-### 1. Backend Setup
+### Local build machine
 
-```bash
-# Navigate to backend directory
-cd backend
+- Node.js 18 or newer
+- npm
+- Git
+- PHP 8.4+ for local backend testing
+- MySQL 8+ for local testing
 
-# Copy environment file
-cp .env.example .env
+### Hostinger
 
-# Edit .env with your database credentials
-nano .env
-```
+- PHP 8.4+ enabled
+- MySQL 8+ database
+- File Manager, FTP, or SFTP access
+- HTTPS/SSL enabled for the domain
+- Apache `mod_rewrite` enabled
+- PHP extensions:
+  - PDO
+  - PDO MySQL
+  - JSON
+  - OpenSSL
+  - Mbstring
+  - Fileinfo
 
-Configure your `.env` file:
-```env
-APP_NAME="TBB OS"
-APP_ENV=development
-APP_URL=http://localhost:8000
-APP_DEBUG=true
-
-DB_HOST=127.0.0.1
-DB_PORT=3306
-DB_NAME=tbb_os
-DB_USER=root
-DB_PASS=your_password
-DB_CHARSET=utf8mb4
-
-SESSION_DOMAIN=localhost
-
-ADMIN_USERNAME=admin
-ADMIN_PASSWORD=admin123
-```
-
-### 2. Database Setup
-
-```bash
-# Create database
-mysql -u root -p -e "CREATE DATABASE tbb_os CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
-
-# Import schema
-mysql -u root -p tbb_os < ../database/schema.sql
-```
-
-Or use the web installer:
-```bash
-# Start PHP built-in server
-php -S localhost:8000 -t public
-
-# Visit http://localhost:8000/install.php
-```
-
-### 3. Frontend Setup
-
-```bash
-# Install dependencies
-npm install
-
-# Copy environment file
-cp .env.example .env
-
-# Start development server
-npm run dev
-```
-
-Visit http://localhost:3000
-
-Login credentials:
-- Username: `admin`
-- Password: `admin123`
+Check the actual PHP version and extensions in Hostinger before deployment. Do not assume that the hosting plan matches the local environment.
 
 ---
 
-## 🌐 Production Deployment (Hostinger)
+## 2. Deployment Layout
 
-### Step 1: Prepare Backend
+A recommended same-domain layout is:
 
-1. **Upload Backend Files**
-   - Upload entire `backend/` directory to your Hostinger account
-   - Recommended location: `public_html/api/` or a subdomain
+```text
+public_html/
+├── index.html
+├── assets/
+├── .htaccess                 # frontend React Router fallback
+└── api/
+    ├── public/               # API web root
+    │   ├── index.php
+    │   └── .htaccess
+    ├── app/
+    ├── config/
+    ├── storage/
+    ├── install.php           # delete after installation
+    ├── .env                  # keep outside public access where possible
+    └── ...
+```
 
-2. **Configure .env**
-   ```bash
-   cd backend
-   cp .env.example .env
-   ```
-   
-   Edit `.env` with your Hostinger database credentials:
-   ```env
-   APP_ENV=production
-   APP_URL=https://yourdomain.com
-   APP_DEBUG=false
-   
-   DB_HOST=localhost
-   DB_NAME=u123456789_tbbos
-   DB_USER=u123456789_admin
-   DB_PASS=your_secure_password
-   
-   ADMIN_USERNAME=admin
-   ADMIN_PASSWORD=your_secure_password
-   ```
+If Hostinger allows a separate document root, configure the API domain or subdomain to point directly to `backend/public/`. This is preferable because `backend/app`, `backend/config`, and `backend/storage` should not be publicly browsable.
 
-3. **Set Permissions**
-   ```bash
-   chmod 755 backend/public
-   chmod 644 backend/public/.htaccess
-   chmod 755 backend/storage
-   ```
+If the API is deployed under `public_html/api/`, ensure requests are routed to `api/public/index.php` and that non-public backend directories cannot be downloaded.
 
-### Step 2: Setup Database
+---
 
-1. **Create MySQL Database** in Hostinger control panel:
-   - Database Name: `tbb_os`
-   - Database User: Create new user with full privileges
-   - Note the credentials
+## 3. Build the Frontend
 
-2. **Import Schema**:
-   - Use phpMyAdmin from Hostinger control panel
-   - Import `database/schema.sql`
-   
-   Or run the installer:
-   - Visit `https://yourdomain.com/api/install.php`
-   - Follow the installation wizard
-
-### Step 3: Build Frontend
+Run these commands on the local build machine, not on Hostinger shared hosting:
 
 ```bash
-# Update API URL
-echo "VITE_API_URL=https://yourdomain.com/api" > .env
-
-# Build for production
+npm ci
+npm run typecheck
 npm run build
 ```
 
-### Step 4: Upload Frontend
+The production build is written to `dist/` according to `vite.config.ts`.
 
-1. **Upload dist/ directory** to your web root:
-   - Location: `public_html/` (for main domain)
-   - Or: `public_html/app/` (for subdirectory)
+Before building, configure the API URL in the frontend environment file used by the project. For a same-domain deployment:
 
-2. **Configure .htaccess** (if using subdirectory):
-   ```apache
-   RewriteEngine On
-   RewriteBase /app/
-   RewriteRule ^index\.html$ - [L]
-   RewriteCond %{REQUEST_FILENAME} !-f
-   RewriteCond %{REQUEST_FILENAME} !-d
-   RewriteRule . /app/index.html [L]
-   ```
-
-### Step 5: Configure API URL
-
-Update frontend to point to your backend API:
-
-**Option A: Same Domain**
-```env
+```dotenv
 VITE_API_URL=/api
 ```
 
-**Option B: Separate Subdomain**
-```env
-VITE_API_URL=https://api.yourdomain.com
+For a separate API subdomain:
+
+```dotenv
+VITE_API_URL=https://api.example.com
 ```
 
-**Option C: Subdirectory**
-```env
-VITE_API_URL=/api
-```
+Do not commit production `.env` files or database credentials.
 
-### Step 6: Security Checklist
-
-- ✅ Delete `install.php` after installation
-- ✅ Change default admin password
-- ✅ Set `APP_DEBUG=false` in production
-- ✅ Enable HTTPS/SSL
-- ✅ Set proper file permissions
-- ✅ Configure CORS in backend if needed
-- ✅ Setup regular database backups
+After the build succeeds, upload the **contents of `dist/`** to the frontend document root, normally `public_html/`.
 
 ---
 
-## 🔧 Post-Installation
+## 4. Frontend `.htaccess` for React Router
 
-### 1. Test the Application
+The frontend document root must contain `.htaccess` so that browser refreshes and direct links such as `/orders/123` return the React application instead of a server 404.
 
-1. **Login**: Visit your domain and login with admin credentials
-2. **Create a Bale**: Test bale creation
-3. **Add Products**: Create some products
-4. **Create Customer**: Add a customer
-5. **Quick Order**: Test the order workflow
-6. **Print Voucher**: Test thermal printing
+The repository includes `public/.htaccess`, which is copied into the production build when Vite copies the public directory:
 
-### 2. Configure Business Settings
+```apacheconf
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+  RewriteRule ^index\.html$ - [L]
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteCond %{REQUEST_FILENAME} !-l
+  RewriteRule . /index.html [L]
+</IfModule>
+```
 
-1. Go to **Settings** page
-2. Update business information:
-   - Business Name
-   - Phone Number
-   - Facebook Page
-   - Address
-   - Voucher Footer Message
+If the application is deployed in a subdirectory such as `/app/`, change the rewrite base and fallback target to match that subdirectory:
 
-### 3. Setup Thermal Printer
+```apacheconf
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /app/
+  RewriteRule ^index\.html$ - [L]
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteCond %{REQUEST_FILENAME} !-l
+  RewriteRule . /app/index.html [L]
+</IfModule>
+```
 
-1. Connect XPrinter XP-80U to your computer
-2. Install printer driver
-3. Set as default printer
-4. Configure paper size: 80mm × auto
-5. Test print from Voucher page
+Test direct browser access after upload:
+
+```text
+https://example.com/
+https://example.com/orders/123
+https://example.com/customers
+```
+
+The route must load the React application rather than returning 404. A valid application-level “not found” page is acceptable for an unknown record, but the web server must not reject the frontend route itself.
 
 ---
 
-## 📊 Database Backup
+## 5. Create the Hostinger MySQL Database
 
-### Manual Backup (phpMyAdmin)
+1. Open **Hostinger hPanel → Databases → MySQL Databases**.
+2. Create a database and database user.
+3. Grant the user access to the database.
+4. Record the exact Hostinger-generated database name, username, password, host, and port.
+5. Open phpMyAdmin if you prefer to import the schema manually.
 
-1. Login to Hostinger control panel
-2. Open phpMyAdmin
-3. Select your database
-4. Click "Export"
-5. Choose "Quick" export method
-6. Format: SQL
-7. Click "Go"
-8. Save the .sql file
+Hostinger database names and usernames commonly include an account prefix. Use the exact values shown in hPanel; do not use the local defaults from development.
 
-### Automated Backup (Recommended)
+---
 
-Create a cron job in Hostinger:
+## 6. Configure the PHP API Environment
+
+Copy `backend/.env.example` to a private `.env` file on the server and replace every placeholder:
+
+```dotenv
+APP_NAME="TBB OS"
+APP_ENV=production
+APP_URL=https://example.com
+APP_DEBUG=false
+
+TIMEZONE=Asia/Yangon
+
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_NAME=hostinger_database_name
+DB_USER=hostinger_database_user
+DB_PASS=replace_with_a_strong_database_password
+DB_CHARSET=utf8mb4
+
+SESSION_DOMAIN=example.com
+CORS_ALLOWED_ORIGINS=https://example.com,https://www.example.com
+```
+
+Security requirements:
+
+- `APP_ENV=production`
+- `APP_DEBUG=false`
+- Use HTTPS in `APP_URL`
+- Use a strong database password
+- Never commit `.env`
+- Do not add `ADMIN_PASSWORD` or plaintext production passwords to the environment file
+- Keep the business timezone as `Asia/Yangon` unless the business configuration intentionally changes
+
+If the frontend and API use different domains, set `APP_URL` and `CORS_ALLOWED_ORIGINS` to the exact frontend origin(s). Do not use `*` with credentialed session requests.
+
+---
+
+## 7. Upload the Backend
+
+Upload the backend files using one of these supported layouts.
+
+### Preferred: separate API document root
+
+Configure `api.example.com` to use `backend/public/` as its document root. Upload the remaining backend directories outside that public root:
+
+```text
+backend-public-root/
+├── index.php
+└── .htaccess
+
+private-backend-root/
+├── app/
+├── config/
+├── storage/
+├── .env
+└── install.php
+```
+
+### Alternative: API subdirectory
+
+Upload the backend under `public_html/api/`. In that case, ensure the API entry point and rewrite rules match the actual URL prefix. Do not expose `app/`, `config/`, `storage/`, or `.env` as downloadable public directories.
+
+The backend `.htaccess` routes API requests to `index.php` and blocks common sensitive file extensions:
+
+```apacheconf
+RewriteEngine On
+RewriteBase /
+
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.*)$ index.php [QSA,L]
+```
+
+If the API is served from a subdirectory, verify the rewrite behavior in the actual Hostinger layout rather than copying a `RewriteBase` blindly.
+
+---
+
+## 8. Initialize the Application
+
+The repository includes `backend/install.php` for first-run initialization.
+
+1. Confirm the `.env` file is configured.
+2. Confirm the database user can create and modify tables.
+3. Open the installer URL in a browser, for example:
+
+```text
+https://example.com/api/install.php
+```
+
+or, when using a separate API subdomain:
+
+```text
+https://api.example.com/install.php
+```
+
+4. Enter a unique administrator username.
+5. Enter a strong administrator password. Do not use `admin123` or any other documented/example password.
+6. Complete installation.
+7. Confirm the login page works.
+8. Confirm the `backend/storage/.installed` lock file was created.
+9. **Delete `install.php` from the server immediately after successful installation.**
+
+The installer must not be used as a password-reset mechanism. If a production installation already exists, do not remove the lock or rerun the installer without a controlled recovery plan.
+
+A fresh installation should contain only:
+
+- The bootstrap administrator account
+- Default business settings
+- Empty bales, products, customers, orders, expenses, and financial records
+
+No demo or sample business records should be created.
+
+---
+
+## 9. File Permissions and Storage
+
+Use the least permissive permissions supported by the Hostinger account:
 
 ```bash
-# Daily backup at 2 AM
-0 2 * * * /usr/bin/mysqldump -u DB_USER -p'DB_PASS' DB_NAME | gzip > /home/user/backups/tbb_os_$(date +\%Y\%m\%d).sql.gz
+chmod 755 backend/storage
+chmod 755 backend/storage/logs
+chmod 755 backend/storage/rate_limits
+chmod 640 backend/.env
 ```
 
-### In-App Backup
+If Hostinger does not permit these exact commands, use File Manager permissions that prevent public write access and keep `.env` private.
 
-1. Go to **Settings** → **Backup** tab
-2. Click "Export Database Backup"
-3. Download the JSON file
+The following directories must not be publicly browsable:
 
----
+- `backend/app/`
+- `backend/config/`
+- `backend/storage/`
+- `backend/vendor/`, if present
+- Any directory containing `.env`, logs, sessions, or backup files
 
-## 🐛 Troubleshooting
-
-### Issue: API returns 404
-**Solution**: Check `.htaccess` file exists in `backend/public/`
-
-### Issue: CORS errors
-**Solution**: Update `APP_URL` in backend `.env` to match your frontend domain
-
-### Issue: Database connection failed
-**Solution**: 
-- Verify database credentials in `.env`
-- Check database user has proper permissions
-- Ensure database exists
-
-### Issue: Can't login
-**Solution**:
-- Run installer again to reset admin password
-- Or manually update password in database:
-  ```sql
-  UPDATE users SET password_hash = '$2y$10$...' WHERE username = 'admin';
-  ```
-
-### Issue: Voucher not printing correctly
-**Solution**:
-- Check printer is set as default
-- Verify paper size is 80mm
-- Clear browser cache
-- Try different browser
+Do not store downloadable database backups inside the public web root.
 
 ---
 
-## 📞 Support
+## 10. Production Verification Checklist
 
-For technical support:
-- Check the activity logs in the application
-- Review error logs in `backend/storage/logs/`
-- Enable debug mode temporarily: `APP_DEBUG=true`
+Perform these checks after deployment:
 
----
+### Application and routing
 
-## 🔐 Security Best Practices
+- [ ] `https://example.com/` loads the frontend
+- [ ] Direct refresh of `/orders/123` loads the React application
+- [ ] API health/login request reaches PHP instead of returning a static 404
+- [ ] Browser developer tools show no mixed-content HTTP requests
+- [ ] HTTPS certificate is valid
 
-1. **Never commit .env files** to version control
-2. **Use strong passwords** for admin and database
-3. **Enable HTTPS** for all pages
-4. **Regular backups** - daily automated backups
-5. **Keep PHP updated** - use latest 8.4.x version
-6. **Monitor activity logs** - check for suspicious activity
-7. **Limit database permissions** - use dedicated user with minimal privileges
-8. **Disable debug mode** in production
-9. **Delete install.php** after installation
-10. **Use firewall** to restrict database access
+### Authentication and security
 
----
+- [ ] Login succeeds with the installer-created administrator
+- [ ] Logout invalidates the session
+- [ ] Staff cannot access admin-only endpoints and receives HTTP 403
+- [ ] CSRF-protected write requests work only with a valid token
+- [ ] Production errors do not expose file paths, SQL, or stack traces
+- [ ] `install.php` has been deleted
+- [ ] `.env` cannot be downloaded
+- [ ] `storage/` cannot be browsed publicly
 
-## 📈 Performance Optimization
+### Business flow
 
-### Frontend
-- ✅ Code splitting enabled (lazy loading)
-- ✅ Tree shaking for unused code
-- ✅ Gzip compression on server
-- ✅ Browser caching headers
+- [ ] Create a bale
+- [ ] Add multiple products to the bale
+- [ ] Confirm product codes use the expected format
+- [ ] Search for a product by code
+- [ ] Create a customer
+- [ ] Create a quick order
+- [ ] Confirm voucher number format and uniqueness
+- [ ] Confirm order customer/address snapshots
+- [ ] Confirm payment method and payment status
+- [ ] Confirm cancelled orders are excluded from revenue
+- [ ] Confirm finance uses historical item cost snapshots
+- [ ] Confirm a closed bale rejects new products
 
-### Backend
-- ✅ Database indexes on frequently queried fields
-- ✅ Prepared statements for all queries
-- ✅ Connection pooling (if using persistent connections)
-- ✅ Query optimization for reports
+### Empty-state behavior
 
-### Server
-- Enable OPcache for PHP
-- Use CDN for static assets
-- Enable browser caching
-- Use Redis/Memcached for session storage (optional)
+- [ ] Dashboard works with no business records
+- [ ] Bale list shows an empty state
+- [ ] Product list shows an empty state
+- [ ] Customer list shows an empty state
+- [ ] Order list shows an empty state
+- [ ] Expense and finance screens show zero values without errors
 
----
+### Backup and recovery
 
-## ✅ Deployment Checklist
+- [ ] Admin-only backup endpoint is accessible
+- [ ] Staff cannot download backups
+- [ ] Backup is downloaded to the administrator's device and is not stored publicly
+- [ ] A backup is copied to secure offline/cloud storage
+- [ ] Restore procedure is tested on a separate database before relying on the backup
 
-- [ ] Backend uploaded to server
-- [ ] Database created and schema imported
-- [ ] Backend `.env` configured
-- [ ] `install.php` run successfully
-- [ ] `install.php` deleted
-- [ ] Frontend built with correct API URL
-- [ ] Frontend uploaded to web root
-- [ ] HTTPS enabled
-- [ ] Admin password changed
-- [ ] Business settings configured
-- [ ] Thermal printer tested
-- [ ] Test order created
-- [ ] Backup system configured
-- [ ] Activity logs reviewed
+### Printing
+
+- [ ] Voucher preview renders expected customer-facing fields
+- [ ] Browser print preview is checked at 80mm width
+- [ ] Physical XPrinter XP-80U testing is completed separately
 
 ---
 
-## 🎉 You're Ready!
+## 11. Database Backups
 
-Your TBB OS is now live and ready for business operations!
+### Hostinger/phpMyAdmin backup
 
-**Quick Start**:
-1. Login at your domain
-2. Create your first bale
-3. Add products from the bale
-4. Create a customer
-5. Process your first order
-6. Print the voucher
+1. Open phpMyAdmin from Hostinger.
+2. Select the TBB OS database.
+3. Choose **Export**.
+4. Use SQL format.
+5. Download the export.
+6. Store it outside the public web root.
 
-Happy selling! 🛍️
+### Hostinger automated backups
+
+Use Hostinger's backup and cron features where available. If using `mysqldump`, keep credentials out of publicly accessible files and avoid placing generated dumps under `public_html`:
+
+```bash
+mysqldump -u DB_USER -p DB_NAME | gzip > /home/account-private/backups/tbb_os_$(date +\%Y\%m\%d).sql.gz
+```
+
+Use a private path appropriate to the Hostinger account. Test that the backup can be restored before treating the process as reliable.
+
+### In-application export
+
+The Settings backup endpoint is an authenticated administrative export of business data. It is not a replacement for tested MySQL backups or a restore plan.
+
+---
+
+## 12. Troubleshooting
+
+### Frontend route returns 404 after refresh
+
+- Confirm the frontend `.htaccess` was uploaded to the same directory as `index.html`.
+- Confirm `mod_rewrite` is enabled.
+- Confirm the rewrite target matches the deployment root (`/index.html` or `/app/index.html`).
+- Clear browser/CDN cache after changing rewrite rules.
+
+### API returns 404
+
+- Confirm the API document root points to `backend/public/`, or that the subdirectory rewrite maps to the actual `index.php`.
+- Confirm `backend/public/.htaccess` exists.
+- Confirm the request URL matches the configured `VITE_API_URL`.
+- Check Hostinger Apache/PHP error logs.
+
+### CORS or session errors
+
+- Confirm `APP_URL` matches the frontend origin.
+- Confirm `CORS_ALLOWED_ORIGINS` contains the exact origin, including scheme and optional `www` host.
+- Use HTTPS for both frontend and API.
+- Confirm browser cookies are not being blocked because of an incorrect session domain.
+
+### Database connection failure
+
+- Recheck the exact Hostinger database name and username.
+- Confirm the database user has access.
+- Confirm `DB_HOST` and `DB_PORT` supplied by Hostinger.
+- Confirm required PDO MySQL extension is enabled.
+- Keep `APP_DEBUG=false` in production and inspect server logs instead of exposing errors.
+
+### Installer cannot write the lock file
+
+- Confirm `backend/storage/` exists and is writable by PHP.
+- Correct the directory permissions through Hostinger File Manager.
+- Do not disable security controls or make the entire site writable.
+
+### Voucher or receipt does not print correctly
+
+- Use the application preview/browser print preview.
+- Select an 80mm paper profile where available.
+- Verify print margins and scaling.
+- Perform physical XPrinter XP-80U validation separately; software deployment alone is not hardware validation.
+
+---
+
+## 13. Production Security Rules
+
+- Never commit `.env` files.
+- Never use example passwords in production.
+- Never leave `install.php` on a live server after setup.
+- Keep `APP_DEBUG=false`.
+- Use HTTPS everywhere.
+- Do not expose backend source, configuration, logs, sessions, or backups.
+- Use an administrator account only for administrative work; create staff accounts for daily operations.
+- Back up the database regularly and test restoration.
+- Review activity logs for unusual access or changes.
+- Keep PHP, MySQL, Hostinger, and frontend dependencies supported and patched.
+- Do not use localStorage or mock records as a substitute for the MySQL business data.
+
+---
+
+## 14. Deployment Status
+
+Deployment is complete only after the actual Hostinger environment passes the production verification checklist above.
+
+Repository configuration and documentation do not prove that a live Hostinger deployment works. The following require testing on the target environment:
+
+- Actual DNS and SSL configuration
+- Actual PHP version and extensions
+- Actual MySQL credentials and permissions
+- Actual Apache rewrite behavior
+- Actual session cookies and CORS behavior
+- Actual React Router deep links
+- Actual backup restoration
+- Physical XPrinter XP-80U output
