@@ -12,13 +12,13 @@ class Response
         exit;
     }
 
-    public static function success(mixed $data = null, string $message = 'Success'): void
+    public static function success(mixed $data = null, string $message = 'Success', array $extra = []): void
     {
-        self::json([
+        self::json(array_merge([
             'success' => true,
             'message' => $message,
             'data'    => $data,
-        ]);
+        ], $extra));
     }
 
     public static function error(string $message, int $status = 400, mixed $details = null): void

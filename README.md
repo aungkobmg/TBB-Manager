@@ -110,9 +110,7 @@ npm run dev
 
 Visit http://localhost:3000
 
-**Login:**
-- Username: `admin`
-- Password: `admin123`
+Then run the installer at `/api/install.php` (or `/install.php` when serving `backend/public`) to create the first admin account with your own credentials.
 
 ## 📖 Documentation
 
@@ -219,12 +217,12 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for complete instructions.
 ### Quick Deployment Steps
 
 1. Upload `backend/` to Hostinger
-2. Configure `.env` with database credentials
-3. Run `install.php` to setup database
-4. Build frontend: `npm run build`
-5. Upload `dist/` to web root
-6. Configure API URL
-7. Delete `install.php`
+2. Serve `backend/public/` as the `/api` web root and keep `app/`, `config/`, `storage/`, and `.env` outside the public web root
+3. Configure backend `.env` with database credentials and frontend origin
+4. Import `database/schema.sql`, then run `/api/install.php` once to create the first admin user
+5. Build frontend: `npm run build`
+6. Upload `dist/` plus `public/.htaccess` to the frontend web root
+7. Delete or disable installer access after setup
 
 ## 📝 License
 
@@ -236,7 +234,7 @@ Built for **The Bra Boutique (Yangon)**
 
 ---
 
-**Status:** ✅ Production Ready
+**Status:** Deployment requires environment-specific verification
 
 **Last Updated:** 2026
 

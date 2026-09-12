@@ -21,7 +21,7 @@ Content-Type: application/json
 
 {
   "username": "admin",
-  "password": "admin123"
+  "password": "your_installer_created_password"
 }
 ```
 
@@ -230,6 +230,27 @@ Content-Type: application/json
   "township": "Township",
   "city": "Yangon",
   "notes": "Optional notes"
+}
+```
+
+Successful create/update responses may also include optional top-level duplicate warning metadata without blocking the save:
+
+```json
+{
+  "success": true,
+  "message": "Customer created",
+  "warning": "Customer saved, but matching phone or Facebook data already exists. Please review duplicates.",
+  "warnings": {
+    "duplicates": [
+      {
+        "id": 12,
+        "name": "Existing Customer",
+        "match_field": "phone",
+        "match_value": "09123456789"
+      }
+    ]
+  },
+  "data": { "...": "customer payload" }
 }
 ```
 
@@ -506,7 +527,7 @@ All errors follow this format:
 3. **CSRF:** Protected by session-based authentication
 4. **SQL Injection:** All queries use prepared statements
 5. **XSS:** All output is properly escaped
-6. **Rate Limiting:** Consider implementing for production
+6. **Rate Limiting:** Login attempts are rate-limited by IP and username
 7. **HTTPS:** Always use HTTPS in production
 
 ## 📊 Pagination

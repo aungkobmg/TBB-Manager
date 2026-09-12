@@ -23,12 +23,19 @@ class RBAC
 
     // Staff-allowed endpoints (subset)
     private const STAFF_ALLOWED_PATTERNS = [
+        'POST /logout',
+        'POST /auth/logout',
+        'GET /auth/me',
+        'GET /auth/csrf-token',
+        'PUT /auth/password',
         'GET /products',
         'GET /products/{id}',
+        'GET /products/search/{code}',
         'POST /products',
         'PUT /products/{id}',
         'GET /customers',
         'GET /customers/{id}',
+        'GET /customers/search',
         'POST /customers',
         'PUT /customers/{id}',
         'GET /orders',

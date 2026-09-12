@@ -13,10 +13,13 @@ loadEnv(dirname(__DIR__) . '/.env');
 $isProduction = env('APP_ENV', 'production') === 'production';
 
 if ($isProduction) {
+    $logDir = dirname(__DIR__) . '/storage/logs';
+    if (is_dir($logDir) || mkdir($logDir, 0755, true) || is_dir($logDir)) {
+        ini_set('error_log', $logDir . '/error.log');
+    }
     error_reporting(0);
     ini_set('display_errors', '0');
     ini_set('log_errors', '1');
-    ini_set('error_log', dirname(__DIR__) . '/storage/logs/error.log');
 } else {
     error_reporting(E_ALL);
     ini_set('display_errors', '1');
@@ -129,6 +132,7 @@ $routes = [
     // Auth
     'POST /login'              => ['AuthController', 'login', false],
     'POST /logout'             => ['AuthController', 'logout', true],
+    'POST /auth/logout'        => ['AuthController', 'logout', true],
     'GET /auth/me'             => ['AuthController', 'me', true],
     'GET /auth/csrf-token'     => ['AuthController', 'getCsrfToken', true],
     'PUT /auth/password'       => ['AuthController', 'changePassword', true],

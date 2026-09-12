@@ -34,8 +34,17 @@ async function fetchCsrfToken(): Promise<string | null> {
 interface ApiResponse<T = any> {
   success: boolean;
   message?: string;
+  warning?: string;
   data?: T;
   error?: string;
+  warnings?: {
+    duplicates?: Array<{
+      id: number;
+      name: string;
+      match_field: string;
+      match_value: string;
+    }>;
+  };
   pagination?: {
     total: number;
     page: number;

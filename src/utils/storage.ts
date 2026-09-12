@@ -73,6 +73,15 @@ export interface Customer {
   notes: string;
   createdAt: string;
   updatedAt: string;
+  warning?: string;
+  warnings?: {
+    duplicates?: Array<{
+      id: number;
+      name: string;
+      match_field: string;
+      match_value: string;
+    }>;
+  };
 }
 
 export interface OrderItem {
@@ -412,11 +421,14 @@ export async function createCustomer(customer: Partial<Customer>): Promise<Custo
     city: customer.city,
     notes: customer.notes,
   });
-  return mapCustomer(res.data);
+  return applyCustomerWarnings(mapCustomer(res.data), {
+    warning: res.warning,
+    warnings: res.warnings,
+  });
 }
 
-export async function updateCustomer(id: number, updates: Partial<Customer>): Promise<void> {
-  await api.put(`/customers/${id}`, {
+export async function updateCustomer(id: number, updates: Partial<Customer>): Promise<Customer> {
+  const res = await api.put<any>(`/customers/${id}`, {
     name: updates.name,
     phone: updates.phone,
     facebookName: updates.facebookName,
@@ -424,6 +436,10 @@ export async function updateCustomer(id: number, updates: Partial<Customer>): Pr
     township: updates.township,
     city: updates.city,
     notes: updates.notes,
+  });
+  return applyCustomerWarnings(mapCustomer(res.data), {
+    warning: res.warning,
+    warnings: res.warnings,
   });
 }
 
@@ -440,6 +456,16 @@ function mapCustomer(c: any): Customer {
     createdAt: c.created_at || '',
     updatedAt: c.updated_at || '',
   };
+}
+
+function applyCustomerWarnings(customer: Customer, response: { warning?: string; warnings?: Customer['warnings'] }): Customer {
+  if (response.warning) {
+    customer.warning = response.warning;
+  }
+  if (response.warnings) {
+    customer.warnings = response.warnings;
+  }
+  return customer;
 }
 
 // ============================================================
